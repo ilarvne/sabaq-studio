@@ -1,0 +1,45 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import { Studio } from './studio';
+import { StudioStore } from '../persistence/storage';
+
+test('history rolls back manual edits, themes and assistant batches with stable, guarded receipts', async (t) => {
+  const store = new StudioStore(':memory:');
+  const studio = new Studio(store);
+  t.after(async () => studio.close());
+  const deckId = 'schoolyard-en';
+  const initial = studio.deck(deckId);
+  const slide = initial.slides[0];
+  const op = { kind: 'slide', slideId: slide.id, baseVersion: slide.version, changes: { notes: 'A teacher edit.' } } as const;
+  const editId = randomUUID();
+  const manual = studio.editWithReceipt(deckId, op, editId);
+  const theme = studio.edit(deckId, { kind: 'deck', theme: 'blueprint' }, randomUUID());
+  const newSlideId = randomUUID();
+  const batch = [{ kind: 'duplicate' as const, slideId: slide.id, newSlideId }];
+  const preview = studio.previewAssistantBatch(theme, batch);
+  const approved = store.transaction(() => studio.commitAssistantBatch(studio.deck(deckId), batch, 'proposal'));
+  assert.equal(preview.slides[1].id, newSlideId);
+  assert.equal(approved.slides[1].id, newSlideId);
+  assert.equal(studio.editWithReceipt(deckId, op, editId).revision, manual.deck.revision);
+  assert.equal(studio.deck(deckId).revision, approved.revision);
+
+  const undoId = randomUUID();
+  const undoAI = studio.restore(deckId, theme.revision, approved.revision, 'undo', undoId);
+  assert.equal(undoAI.slides.some((item) => item.id === newSlideId), false);
+  assert.equal(undoAI.theme, theme.theme);
+  assert.throws(() => studio.restore(deckId, initial.revision, undoAI.revision, 'redo', undoId), /already used/);
+  assert.throws(() => studio.restore(deckId, manual.deck.revision, approved.revision, 'undo', randomUUID()), /revision changed/);
+  const undoTheme = studio.restore(deckId, manual.deck.revision, undoAI.revision, 'undo', randomUUID());
+  assert.equal(undoTheme.theme, initial.theme);
+  assert.equal(undoTheme.slides[0].notes, 'A teacher edit.');
+  const undoManual = studio.restore(deckId, initial.revision, undoTheme.revision, 'undo', randomUUID());
+  assert.equal(undoManual.slides[0].notes, slide.notes);
+  const redoAI = studio.restore(deckId, approved.revision, undoManual.revision, 'redo', randomUUID());
+  assert.equal(redoAI.slides[1].id, newSlideId);
+  assert.equal(redoAI.theme, theme.theme);
+  assert.equal(redoAI.slides[0].notes, 'A teacher edit.');
+  assert.ok(redoAI.slides[0].version > approved.slides[0].version);
+  assert.equal(studio.restore(deckId, theme.revision, approved.revision, 'undo', undoId).revision, undoAI.revision);
+  assert.equal(studio.deck(deckId).revision, redoAI.revision);
+});

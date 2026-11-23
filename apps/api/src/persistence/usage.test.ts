@@ -1,0 +1,102 @@
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import { randomUUID } from 'node:crypto';
+import { createStudioServer } from '../app';
+import { StudioStore } from './storage';
+import { Studio } from '../lessons/studio';
+import type { Deck } from '@sabaq/lesson/types';
+
+test('content-free events survive replay and measure first-ready, acceptance, video, completion and rollbacks',async t=>{
+  const store=new StudioStore(':memory:');
+  const studio=new Studio(store);
+  t.after(()=>studio.close());
+  let now=Date.UTC(2026,2,1);
+  t.mock.method(Date,'now',()=>now);
+  const start=now;
+  const org={org:'school',subject:'teacher'},other={org:'school',subject:'other'};
+  const input={creationId:randomUUID(),topic:'Private class title',template:'blank',provider:'fixture' as const,language:'en' as const,review:false};
+  store.usage.started(input.creationId,'en',org);
+  store.usage.started(input.creationId,'en',org,'level');
+  store.usage.started(input.creationId,'en',org,'level');
+  store.usage.started(randomUUID(),'en',other);
+  now+=120000;
+  const deck=studio.create(input,org);
+  assert.equal(studio.create(input,org).id,deck.id);
+  const proposal=await studio.propose(deck.id,deck.slides[0].id,'Add notes');
+  const applied=studio.decide(deck.id,proposal.id,'apply');
+  now+=30000;
+  studio.restore(deck.id,0,applied.revision,'undo');
+  const retained=await studio.propose(deck.id,deck.slides[0].id,'Add notes');
+  const current=studio.decide(deck.id,retained.id,'apply');
+  studio.decide(deck.id,retained.id,'apply');
+  store.usage.deckEvent(current,'present','same-session');
+  store.usage.deckEvent(current,'present','same-session');
+  now+=3600000;
+  store.usage.deckEvent(current,'video_ready','verified-job');
+  const result=store.usage.report(start,start+86400000,'school','en',now);
+  assert.deepEqual(result,[{org:'school',language:'en',medianSeconds:120,firstReadyUsers:1,
+    proposed:2,accepted:1,ready:1,video:1,openVideoWindows:0,started:2,finished:1,activeDecks:1,manualRollbacks:1}]);
+  assert.deepEqual(store.db.prepare('PRAGMA table_info(usage_events)').all().map(col=>col.name),['id','at','language','slides','action']);
+  const events=store.db.prepare('SELECT action,count(*) AS n FROM usage_events GROUP BY action').all();
+  assert.equal(events.find(row=>row.action==='present')?.n,1);
+  assert.equal(events.find(row=>row.action==='answer')?.n,1);
+  assert.ok(!JSON.stringify(events).includes(input.topic));
+});
+
+test('report API requires a gateway system administrator and filters organizations, language and UTC dates',async t=>{
+  const prev=[process.env.STUDIO_AUTH_MODE,process.env.STUDIO_GATEWAY_SECRET];
+  const token='unit-test-admin-auth-00000000000000000';
+  process.env.STUDIO_AUTH_MODE='gateway';process.env.STUDIO_GATEWAY_SECRET=token;
+  t.after(()=>{['STUDIO_AUTH_MODE','STUDIO_GATEWAY_SECRET'].forEach((k,i)=>{if(prev[i]===undefined)delete process.env[k];else process.env[k]=prev[i];});});
+  const app=createStudioServer({dbPath:':memory:'});
+  t.after(()=>app.close());
+  const user={'x-studio-gateway':token,'x-studio-user':'teacher','x-studio-org':'A'};
+  const admin={...user,'x-studio-role':'system-admin'};
+  const creationId=randomUUID();
+  const payload={creationId,topic:'Private material',template:'blank',language:'kk',provider:'fixture',review:false};
+  await app.inject({method:'POST',url:'/api/usage/creation',headers:user,payload:{id:creationId,language:'kk'}});
+  const deck=(await app.inject({method:'POST',url:'/api/decks',headers:user,payload})).json<Deck>();
+  assert.ok(deck.id);
+  const date=new Date().toISOString().slice(0,10),route='/api/admin/usage?from='+date+'&to='+date;
+  assert.equal((await app.inject({url:route,headers:user})).statusCode,403);
+  const summary=await app.inject({url:route+'&org=A&language=kk',headers:admin});
+  assert.equal(summary.statusCode,200);
+  assert.equal(summary.json().rows[0].started,1);
+  assert.equal(summary.json().rows[0].ready,1);
+  assert.equal(summary.json().rows[0].finished,0);
+  const exportPath='/api/decks/'+deck.id+'/export/pptx?downloadId='+randomUUID();
+  assert.equal((await app.inject({method:'HEAD',url:exportPath,headers:user})).statusCode,200);
+  assert.equal((await app.inject({url:route,headers:admin})).json().rows[0].finished,0);
+  assert.equal((await app.inject({url:exportPath,headers:user})).statusCode,200);
+  assert.equal((await app.inject({url:route,headers:admin})).json().rows[0].finished,1);
+  assert.deepEqual((await app.inject({url:route+'&org=B',headers:admin})).json().rows,[]);
+});
+
+test('video windows include day 30, consider later outcomes and expose immature cohorts', t => {
+  const day = 86_400_000;
+  const start = Date.UTC(2026, 0, 1);
+  let now = start;
+  t.mock.method(Date, 'now', () => now);
+  const store = new StudioStore(':memory:');
+  const studio = new Studio(store);
+  t.after(() => studio.close());
+  const input = { topic:'Cohort', template:'blank', provider:'fixture' as const, language:'ru' as const, review:false };
+  const owner = {org:'school', subject:'teacher'};
+  const boundary = studio.create(input, owner);
+  const expired = studio.create(input, owner);
+  function cohort() {
+    return store.usage.report(start, start + day, 'school', 'ru', now)[0];
+  }
+  now += day;
+  assert.equal(cohort().openVideoWindows, 2);
+  now = start + 30 * day;
+  store.usage.deckEvent(boundary, 'video_ready', 'completed');
+  assert.equal(cohort().video, 1);
+  assert.equal(cohort().openVideoWindows, 0);
+  now++;
+  store.usage.deckEvent(expired, 'video_ready', 'late');
+  const result = cohort();
+  assert.equal(result.video, 1);
+  assert.equal(result.finished, 2);
+  assert.equal(result.ready, 2);
+});
