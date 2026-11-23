@@ -47,7 +47,8 @@ test('slide quality checks editable text against the artwork pixels it covers', 
 
 test('slide quality flags chart graphics with insufficient contrast against the plot', async () => {
   const deck = makeFixtureDeck('en');
-  const chart = deck.slides.find(slide => slide.chart)!;
+  // The lesson-part label also uses the accent color. Isolate the chart marks.
+  const chart = { ...deck.slides.find(slide => slide.chart)!, lessonPart: 'lesson' };
   deck.slides = [chart];
   const builtIn = await measureSlideQuality(deck, roots, signal());
   assert.ok(!builtIn[chart.id].includes('graphic-contrast'));
