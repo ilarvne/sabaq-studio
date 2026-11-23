@@ -1,0 +1,17 @@
+.composer-voice[data-voice-phase] {
+  display:grid;
+  place-items:center;
+  flex:none;
+  padding:0;
+}
+.composer-voice[data-voice-phase] > svg {
+  grid-area:1/1;
+  position:static;
+  width:17px;
+  height:17px;
+  margin:0;
+}
+@media(prefers-reduced-motion:no-preference) {
+  .composer-voice-spin {animation:composer-microphone-spin 900ms linear infinite;}
+}
+@keyframes composer-microphone-spin {to {transform:rotate(360deg);}}

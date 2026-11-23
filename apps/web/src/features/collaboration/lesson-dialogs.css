@@ -1,0 +1,19 @@
+.access-dialog, .versions-dialog { font-family: var(--font-ui); }
+.access-dialog [data-slot=dialog-header], .versions-dialog [data-slot=dialog-header] { padding-inline-end: 45px; }
+.access-dialog-body { display:grid; gap:15px; min-width:0; }
+.access-dialog-body > form { display:grid; gap:10px; }
+.access-dialog-body > form > button { justify-self:end; }
+.access-dialog label, .lesson-dialog-field { display:grid; min-width:0; gap:5px; font-size:13px; font-weight:550; }
+.access-dialog label [data-slot=select-trigger], .lesson-dialog-field [data-slot=select-trigger] { width:100%; }
+.access-dialog-body ul { display:grid; gap:8px; margin:0; padding:0; list-style:none; }
+.access-dialog-body ul:empty { display:none; }
+.access-dialog-body li { min-width:0; overflow-wrap:anywhere; }
+.access-grants li { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:8px; border-top:1px solid var(--border); padding-top:10px; font-size:13px; }
+.access-grants small { display:block; margin-top:3px; color:var(--muted-foreground); font-size:12px; }
+.access-dialog-body h3, .versions-dialog h3 { padding-top:12px; border-top:1px solid var(--border); font-size:15px; font-weight:620; }
+.access-dialog-body > p { margin:0; color:var(--muted-foreground); font-size:12px; line-height:1.5; }
+.access-comments li { padding:10px 12px; border-radius:8px; background:var(--muted); font-size:13px; line-height:1.45; }
+.access-comments p { margin:3px 0 0; }
+.versions-dialog .lesson-dialog-field > [data-slot=select-trigger] { justify-content:flex-start; gap:8px; }
+.versions-dialog [data-slot=dialog-panel] button { white-space:normal; height:auto; min-height:36px; text-align:start; }
+.versions-dialog [data-slot=dialog-panel] section { min-width:0; overflow-wrap:anywhere; }

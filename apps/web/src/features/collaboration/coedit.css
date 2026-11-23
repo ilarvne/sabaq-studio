@@ -1,0 +1,13 @@
+.co-room {max-width:82rem; margin:0 auto; padding:clamp(1rem,3vw,3rem);}
+.co-return { color:var(--primary-ink); text-decoration:underline; text-underline-offset:3px; }
+.co-room select {max-width:90%; padding:.4rem; border:1px solid var(--border); border-radius:.35rem;}
+.co-room [role=status] {margin:.5rem 0;}
+.co-grid {display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:1.5rem;}
+.co-field {display:grid; gap:.35rem; margin:.8rem 0;}
+.co-box {position:relative; display:grid;}
+.co-box textarea,.co-mirror {font:inherit; line-height:1.5; word-break:break-word; overflow-wrap:anywhere; white-space:pre-wrap; padding:.65rem; border:1px solid var(--border); border-radius:.375rem; margin:0; box-sizing:border-box; width:100%; text-align:start; tab-size:8;}
+.co-box textarea {resize:vertical; background:var(--background); color:var(--foreground); min-height:3rem; scrollbar-gutter:stable;}
+.co-mirror {position:absolute; inset:0; pointer-events:none; overflow:auto; scrollbar-gutter:stable; border-color:transparent; color:transparent; scrollbar-color:transparent transparent;}
+.co-mirror i {position:relative; width:0; display:inline; border-inline-start:2px solid currentColor; margin-inline-end:-2px;}
+.co-mirror b {position:absolute; bottom:100%; left:0; line-height:1; font-size:.65rem; background:var(--background); white-space:nowrap; font-style:normal;}
+@media(max-width:750px){.co-grid{grid-template-columns:1fr;}}

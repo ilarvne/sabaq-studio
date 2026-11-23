@@ -1,0 +1,102 @@
+/* Shared controls. Leave the slide renderer, reveal.js and positioners alone. */
+:root {
+  --studio-ease-out: cubic-bezier(.2, .8, .2, 1);
+  --studio-motion-small: 200ms;
+  --studio-motion-large: 400ms;
+}
+
+[data-slot="sheet-overlay"] { backdrop-filter:none; }
+
+@media (prefers-reduced-motion: no-preference) {
+  :where(button, a)[data-slot="button"]:not([aria-pressed], [aria-expanded], [aria-haspopup], [aria-grabbed], .template-preview-trigger, .ed-slide-grip, [role="tab"]) {
+    transition-property: background-color, border-color, color, box-shadow, scale;
+    transition-duration: var(--studio-motion-small);
+    transition-timing-function: var(--studio-ease-out);
+  }
+
+  :where(button, a)[data-slot="button"]:active:not(:disabled, :focus-visible, [data-disabled], [aria-disabled="true"], [aria-pressed], [aria-expanded], [aria-haspopup], [aria-grabbed], .template-preview-trigger, .ed-slide-grip, [role="tab"], [role="toolbar"] *, .rv-stepper *) {
+    scale: .98;
+    transition-duration: 65ms;
+  }
+
+  :is([data-slot="menu-popup"], [data-slot="menu-sub-content"], [data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"], [data-slot="popover-content"], [data-slot="select-popup"], [data-slot="select-content"]) {
+    animation: none;
+    transform-origin: var(--transform-origin, center);
+    transition: opacity 100ms var(--studio-ease-out), scale 120ms var(--studio-ease-out);
+  }
+
+  :is([data-slot="menu-popup"], [data-slot="menu-sub-content"], [data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"], [data-slot="popover-content"]):is([data-starting-style], [data-ending-style]) {
+    opacity: 0;
+    scale: .985;
+  }
+
+  /* A select can place the chosen row directly over its trigger. */
+  :is([data-slot="select-popup"], [data-slot="select-content"]):is([data-starting-style], [data-ending-style]) {
+    opacity: 0;
+  }
+
+  :is([data-slot="dialog-popup"], [data-slot="dialog-backdrop"], [data-slot="sheet-popup"], [data-slot="sheet-backdrop"], [data-slot="sheet-overlay"], [data-slot="sheet-content"]) {
+    transition-duration: 160ms;
+    animation-duration: 160ms;
+    transition-timing-function: var(--studio-ease-out);
+    animation-timing-function: var(--studio-ease-out);
+  }
+
+  .rv-format-check {
+    transition: opacity 100ms ease-out;
+    @starting-style { opacity: 0; }
+  }
+
+  [data-slot="skeleton"] { animation-duration: 1.2s; }
+
+  .creation-hero {
+    animation: studio-hero-enter var(--studio-motion-large) var(--studio-ease-out) both;
+  }
+
+  @keyframes studio-hero-enter {
+    from { opacity: .5; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+}
+
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  :is(.creation-template-link, .template-choose) [data-icon="inline-end"],
+  .library-cover-label > svg,
+  :is(a, button) [data-motion-arrow] {
+    transition: translate 140ms var(--studio-ease-out);
+  }
+
+  :is(.creation-template-link, .template-choose):hover [data-icon="inline-end"],
+  .lesson-card:hover .library-cover-label > svg,
+  :is(a, button):hover [data-motion-arrow] {
+    translate: 2px 0;
+  }
+
+  [data-motion="preview"] [data-motion-media] {
+    transition: scale 160ms var(--studio-ease-out);
+  }
+
+  [data-motion="preview"]:hover [data-motion-media] {
+    scale: 1.012;
+  }
+
+  .template-preview-trigger > span {
+    transition: opacity 100ms ease-out;
+  }
+}
+
+/* Keyboard traversal and focus rings respond in the input frame. */
+:is(button, a, input, textarea, [role="tab"], [role="combobox"]):focus-visible,
+.template-preview-trigger:focus-visible > span {
+  transition-duration: 0s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is([data-slot="button"], [data-slot="dialog-popup"], [data-slot="dialog-backdrop"], [data-slot="sheet-popup"], [data-slot="sheet-backdrop"], [data-slot="sheet-overlay"], [data-slot="sheet-content"], [data-slot="menu-popup"], [data-slot="menu-sub-content"], [data-slot="dropdown-menu-content"], [data-slot="dropdown-menu-sub-content"], [data-slot="popover-content"], [data-slot="select-popup"], [data-slot="select-content"], [data-slot="tooltip-popup"]),
+  .template-preview-trigger > span,
+  [data-motion-arrow],
+  [data-motion-media] {
+    animation: none;
+    transition: none;
+  }
+}

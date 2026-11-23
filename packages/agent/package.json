@@ -1,0 +1,27 @@
+{
+  "name": "@sabaq/agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./decisions": "./src/decisions.ts",
+    "./evidence": "./src/evidence.ts",
+    "./local-commands": "./src/local-commands.ts",
+    "./tools": "./src/tools.ts"
+  },
+  "dependencies": {
+    "@langchain/core": "1.5.0",
+    "@langchain/langgraph": "1.7.5",
+    "@sabaq/contracts": "workspace:*",
+    "@sabaq/lesson": "workspace:*",
+    "langsmith": "0.13.1",
+    "zod": "4.6.7"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "typescript": "7.0.2"
+  }
+}

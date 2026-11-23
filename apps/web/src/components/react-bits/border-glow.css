@@ -1,0 +1,99 @@
+@property --border-glow-angle {
+  syntax: '<angle>';
+  inherits: true;
+  initial-value: -55deg;
+}
+
+.border-glow-card {
+  position: relative;
+  isolation: isolate;
+  min-width: 0;
+  --border-glow-width: 3px;
+  border: var(--border-glow-width) solid var(--home-border);
+  border-radius: var(--border-glow-radius);
+  background: var(--home-surface);
+  box-shadow: 0 1px 3px rgb(26 23 48 / 5%);
+}
+
+.border-glow-decoration {
+  position: absolute;
+  inset: calc(-1 * var(--border-glow-width));
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* One bright portion of the seven-color-position mesh follows the sweep around the frame. */
+.border-glow-decoration::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border: var(--border-glow-width) solid transparent;
+  border-radius: inherit;
+  background:
+    linear-gradient(var(--home-surface) 0 100%) padding-box,
+    var(--border-glow-mesh);
+  mask-image: conic-gradient(
+    from var(--border-glow-angle),
+    black 16%,
+    transparent 39%,
+    transparent 61%,
+    black 84%
+  );
+}
+
+.border-glow-decoration > .edge-light {
+  position: absolute;
+  inset: calc(-1 * var(--border-glow-padding));
+  border-radius: calc(var(--border-glow-radius) + var(--border-glow-padding));
+  mask-image: conic-gradient(
+    from var(--border-glow-angle),
+    black 5%,
+    transparent 22%,
+    transparent 78%,
+    black 95%
+  );
+}
+
+.border-glow-decoration > .edge-light::before {
+  content: '';
+  position: absolute;
+  inset: var(--border-glow-padding);
+  border-radius: var(--border-glow-radius);
+  box-shadow:
+    inset 0 0 0 var(--border-glow-width) color-mix(in oklab, var(--border-glow-color) 62%, transparent),
+    inset 0 0 4px color-mix(in oklab, var(--border-glow-color) 23%, transparent),
+    0 0 3px color-mix(in oklab, var(--border-glow-color) 48%, transparent),
+    0 0 8px color-mix(in oklab, var(--border-glow-color) 25%, transparent),
+    0 0 14px color-mix(in oklab, var(--border-glow-color) 14%, transparent);
+}
+
+.border-glow-inner {
+  position: relative;
+  min-width: 0;
+  border-radius: inherit;
+}
+
+@keyframes border-glow-circulate {
+  from {
+    --border-glow-angle: -55deg;
+  }
+  to {
+    --border-glow-angle: 305deg;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .border-glow-decoration {
+    animation: border-glow-circulate var(--border-glow-duration) linear infinite;
+  }
+}
+
+@media (forced-colors: active) {
+  .border-glow-card {
+    border-color: CanvasText;
+    box-shadow: none;
+  }
+  .border-glow-decoration {
+    display: none;
+  }
+}

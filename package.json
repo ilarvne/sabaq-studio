@@ -1,0 +1,40 @@
+{
+  "name": "lesson-studio",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "packageManager": "bun@1.4.2",
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun --no-env-file scripts/dev.mjs",
+    "build": "turbo run build",
+    "start": "bun --no-env-file scripts/start.mjs",
+    "typecheck": "bun run check:workspaces && turbo run typecheck && tsc --noEmit -p tsconfig.tools.json",
+    "test": "turbo run test",
+    "test:e2e": "playwright test",
+    "eval:jev": "bun apps/api/tools/evaluate-jev.ts",
+    "eval:retrieval": "bun apps/api/tools/evaluate-retrieval.ts",
+    "eval:moderation": "bun apps/api/tools/evaluate-moderation.ts",
+    "check:workspaces": "bun scripts/check-workspaces.mjs",
+    "eval:layout": "bun apps/api/tools/evaluate-layout.ts"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
+    "@playwright/test": "1.65.1",
+    "@types/node": "22.20.5",
+    "jszip": "3.10.1",
+    "typescript": "7.0.2",
+    "@sabaq/contracts": "workspace:*",
+    "@sabaq/lesson": "workspace:*",
+    "turbo": "2.11.13"
+  },
+  "overrides": {
+    "image-size": "2.1.0"
+  }
+}

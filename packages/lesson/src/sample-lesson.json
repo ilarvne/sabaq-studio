@@ -1,0 +1,483 @@
+{
+  "id": "schoolyard-v1",
+  "sourceFile": "schoolyard-source.txt",
+  "sourceSHA256": "00f6d6bcbc6a9bd3a517fcf8dca77a6fbd11fa0ad1ef685716f59461b114409b",
+  "sourceOffsetUnit": "Unicode code points; end exclusive, UTF-8 LF text",
+  "sourceAnchors": {
+    "kk.measurements": {
+      "start": 18,
+      "end": 109,
+      "excerpt": "Мектеп ауласындағы тәжірибеде А ыдысына 24 мл, B ыдысына 36 мл, C ыдысына 48 мл су жиналды."
+    },
+    "kk.teacher": {
+      "start": 124,
+      "end": 169,
+      "excerpt": "Салыстырмас бұрын өлшем бірлігін тексеріңдер."
+    },
+    "kk.procedure": {
+      "start": 186,
+      "end": 410,
+      "excerpt": "Әр топ өз ыдысындағы судың көлемін өлшеп, бақылау парағына жазады. Өлшеуді аяқтаған соң оқушылар нәтижелерін көрші топпен салыстырады. Қай ыдыста көбірек су жиналғанын түсіндіргенде, әр мәннің қасына өлшем бірлігін жазыңдар."
+    },
+    "ru.measurements": {
+      "start": 430,
+      "end": 522,
+      "excerpt": "Во время опыта во дворе школы в сосуд A собрали 24 мл, в сосуд B — 36 мл, в сосуд C — 48 мл."
+    },
+    "ru.teacher": {
+      "start": 537,
+      "end": 582,
+      "excerpt": "Перед сравнением проверьте единицу измерения."
+    },
+    "ru.procedure": {
+      "start": 599,
+      "end": 815,
+      "excerpt": "Каждая группа измеряет объём воды в своём сосуде и записывает его в лист наблюдений. Затем группы сверяют записи. Объясните, в каком сосуде собралось больше воды, и укажите единицу измерения рядом с каждым значением."
+    },
+    "en.measurements": {
+      "start": 835,
+      "end": 929,
+      "excerpt": "In the schoolyard trial, container A collected 24 mL, B collected 36 mL and C collected 48 mL."
+    },
+    "en.teacher": {
+      "start": 944,
+      "end": 989,
+      "excerpt": "Check the unit before comparing the readings."
+    },
+    "en.procedure": {
+      "start": 1006,
+      "end": 1200,
+      "excerpt": "Each group measures the water in its container and records the result. Groups then compare their entries. Explain which container collected the most water and write the unit next to every value."
+    }
+  },
+  "languages": [
+    "kk",
+    "ru",
+    "en"
+  ],
+  "size": [
+    1920,
+    1080
+  ],
+  "slides": [
+    {
+      "id": "s01",
+      "layout": "cover",
+      "lessonPart": "goal",
+      "title": {
+        "kk": "Суды қалай салыстырамыз?",
+        "ru": "Как сравнить объёмы воды?",
+        "en": "How do we compare water volumes?"
+      },
+      "body": {
+        "kk": "Мектеп ауласындағы тәжірибе",
+        "ru": "Опыт в школьном дворе",
+        "en": "A schoolyard investigation"
+      },
+      "notes": {
+        "kk": "Бүгін жиналған суды өлшейміз.",
+        "ru": "Сегодня мы измерим собранную воду.",
+        "en": "Today we will measure the water we collected."
+      },
+      "image": {
+        "brief": "Schoolyard bench and empty measuring containers",
+        "alt": {
+          "kk": "Аулада бос ыдыстар тұр.",
+          "ru": "Пустые сосуды на скамейке.",
+          "en": "Empty containers sit on a schoolyard bench."
+        },
+        "style": "flat watercolour teaching illustration without lettering",
+        "decorative": false
+      }
+    },
+    {
+      "id": "s02",
+      "layout": "image-right",
+      "lessonPart": "recall",
+      "title": {
+        "kk": "Өлшем бірлігі",
+        "ru": "Единица измерения",
+        "en": "A common unit"
+      },
+      "body": {
+        "kk": "Судың көлемін немен өлшейміз?",
+        "ru": "Как измерить объём воды?",
+        "en": "How can we measure the volume of water?"
+      },
+      "notes": {
+        "kk": "Өлшеуіш ыдысты көрсетіңдер.",
+        "ru": "Покажите мерный сосуд.",
+        "en": "Point to the measuring container."
+      },
+      "image": {
+        "brief": "A hand holds a clear measuring cylinder",
+        "alt": {
+          "kk": "Қолда өлшеуіш ыдыс бар.",
+          "ru": "В руке мерный цилиндр.",
+          "en": "A hand holds a measuring cylinder."
+        },
+        "style": "flat watercolour teaching illustration without lettering",
+        "decorative": false
+      }
+    },
+    {
+      "id": "s03",
+      "layout": "body",
+      "lessonPart": "new-material",
+      "title": {
+        "kk": "Өлшеу тәртібі",
+        "ru": "Порядок измерения",
+        "en": "The measurement procedure"
+      },
+      "body": {
+        "kk": "Әр топ өз ыдысындағы судың көлемін өлшеп, бақылау парағына жазады. Өлшеуді аяқтаған соң оқушылар нәтижелерін көрші топпен салыстырады. Қай ыдыста көбірек су жиналғанын түсіндіргенде, әр мәннің қасына өлшем бірлігін жазыңдар.",
+        "ru": "Каждая группа измеряет объём воды в своём сосуде и записывает его в лист наблюдений. Затем группы сверяют записи. Объясните, в каком сосуде собралось больше воды, и укажите единицу измерения рядом с каждым значением.",
+        "en": "Each group measures the water in its container and records the result. Groups then compare their entries. Explain which container collected the most water and write the unit next to every value."
+      },
+      "notes": {
+        "kk": "Топтағы рөлдерді бөлісіңдер.",
+        "ru": "Распределите роли в группе.",
+        "en": "Decide who will read the scale and who will record it."
+      },
+      "evidence": {
+        "kk": [
+          "kk.procedure"
+        ],
+        "ru": [
+          "ru.procedure"
+        ],
+        "en": [
+          "en.procedure"
+        ]
+      }
+    },
+    {
+      "id": "s04",
+      "layout": "image-full",
+      "lessonPart": "example",
+      "title": {
+        "kk": "Бақылау",
+        "ru": "Наблюдение",
+        "en": "Observe"
+      },
+      "body": {
+        "kk": "Су деңгейіне қараңдар.",
+        "ru": "Посмотрите на уровень воды.",
+        "en": "Look at the water level."
+      },
+      "notes": {
+        "kk": "Су деңгейін бірге табайық.",
+        "ru": "Найдём уровень воды вместе.",
+        "en": "Find the water level together."
+      },
+      "image": {
+        "brief": "Close-up of a horizontal water surface in a clear vessel",
+        "alt": {
+          "kk": "Ыдыста су деңгейі көрінеді.",
+          "ru": "В сосуде виден уровень воды.",
+          "en": "The water level is visible inside a clear vessel."
+        },
+        "style": "flat watercolour teaching illustration without lettering",
+        "decorative": false
+      }
+    },
+    {
+      "id": "s05",
+      "layout": "native-table",
+      "lessonPart": "example",
+      "title": {
+        "kk": "Өлшеу нәтижесі",
+        "ru": "Результаты измерения",
+        "en": "Measured volumes"
+      },
+      "body": {
+        "kk": "Деректерді кестеден оқыңдар.",
+        "ru": "Прочитайте значения в таблице.",
+        "en": "Read the values in the table."
+      },
+      "notes": {
+        "kk": "Әр ыдыстың көлемін атаңдар.",
+        "ru": "Назовите объём воды в каждом сосуде.",
+        "en": "Read the volume for each container."
+      },
+      "evidence": {
+        "kk": [
+          "kk.measurements"
+        ],
+        "ru": [
+          "ru.measurements"
+        ],
+        "en": [
+          "en.measurements"
+        ]
+      },
+      "table": {
+        "headers": {
+          "kk": [
+            "Ыдыс",
+            "Көлем, мл"
+          ],
+          "ru": [
+            "Сосуд",
+            "Объём, мл"
+          ],
+          "en": [
+            "Container",
+            "Volume, mL"
+          ]
+        },
+        "rows": [
+          [
+            "A",
+            24
+          ],
+          [
+            "B",
+            36
+          ],
+          [
+            "C",
+            48
+          ]
+        ]
+      }
+    },
+    {
+      "id": "s06",
+      "layout": "data-chart",
+      "lessonPart": "practice",
+      "title": {
+        "kk": "Ыдыстарды салыстыру",
+        "ru": "Сравнение сосудов",
+        "en": "Compare the containers"
+      },
+      "body": {
+        "kk": "Бағандардың биіктігін салыстырыңдар.",
+        "ru": "Сравните высоту столбцов.",
+        "en": "Compare the heights of the bars."
+      },
+      "notes": {
+        "kk": "Ең биік бағанды табыңдар.",
+        "ru": "Найдите самый высокий столбец.",
+        "en": "Find the tallest bar."
+      },
+      "evidence": {
+        "kk": [
+          "kk.measurements"
+        ],
+        "ru": [
+          "ru.measurements"
+        ],
+        "en": [
+          "en.measurements"
+        ]
+      },
+      "chart": {
+        "type": "bar",
+        "categories": [
+          "A",
+          "B",
+          "C"
+        ],
+        "series": [
+          {
+            "name": {
+              "kk": "Көлем, мл",
+              "ru": "Объём, мл",
+              "en": "Volume, mL"
+            },
+            "values": [
+              24,
+              36,
+              48
+            ]
+          }
+        ],
+        "alt": {
+          "kk": "A — 24 мл, B — 36 мл, C — 48 мл.",
+          "ru": "A — 24 мл, B — 36 мл, C — 48 мл.",
+          "en": "A collected 24 mL, B 36 mL and C 48 mL."
+        }
+      }
+    },
+    {
+      "id": "s07",
+      "layout": "quote",
+      "lessonPart": "practice",
+      "title": {
+        "kk": "Мұғалімнің нұсқауы",
+        "ru": "Совет учителя",
+        "en": "The teacher’s instruction"
+      },
+      "body": {
+        "kk": "«Салыстырмас бұрын өлшем бірлігін тексеріңдер.»",
+        "ru": "«Перед сравнением проверьте единицу измерения.»",
+        "en": "“Check the unit before comparing the readings.”"
+      },
+      "notes": {
+        "kk": "Осы нұсқауды тәжірибеде қолданыңдар.",
+        "ru": "Примените этот совет к нашему опыту.",
+        "en": "Apply that instruction to this trial."
+      },
+      "evidence": {
+        "kk": [
+          "kk.teacher"
+        ],
+        "ru": [
+          "ru.teacher"
+        ],
+        "en": [
+          "en.teacher"
+        ]
+      }
+    },
+    {
+      "id": "s08",
+      "layout": "image-left",
+      "lessonPart": "check",
+      "title": {
+        "kk": "Қай ыдыста су көп?",
+        "ru": "Где больше воды?",
+        "en": "Which container holds the most water?"
+      },
+      "body": {
+        "kk": "Жауабыңды негізде.",
+        "ru": "Обоснуйте ответ.",
+        "en": "Explain your answer."
+      },
+      "notes": {
+        "kk": "Жауап берер алдында кестеге қараңдар.",
+        "ru": "Прежде чем ответить, сверьтесь с таблицей.",
+        "en": "Check the table before answering."
+      },
+      "image": {
+        "brief": "Three transparent containers with visibly different water levels",
+        "alt": {
+          "kk": "Ыдыстардағы су деңгейі әртүрлі.",
+          "ru": "В сосудах разные уровни воды.",
+          "en": "The containers show different water levels."
+        },
+        "style": "flat watercolour teaching illustration without lettering",
+        "decorative": false
+      },
+      "evidence": {
+        "kk": [
+          "kk.measurements"
+        ],
+        "ru": [
+          "ru.measurements"
+        ],
+        "en": [
+          "en.measurements"
+        ]
+      },
+      "revealAnswer": {
+        "kk": "C ыдысында 48 мл су бар.",
+        "ru": "В сосуде C — 48 мл.",
+        "en": "Container C holds 48 mL."
+      }
+    },
+    {
+      "id": "s09",
+      "layout": "avatar-right",
+      "lessonPart": "summary",
+      "title": {
+        "kk": "Қорытынды",
+        "ru": "Вывод",
+        "en": "Conclusion"
+      },
+      "body": {
+        "kk": "Мектеп ауласындағы тәжірибеде А ыдысына 24 мл, B ыдысына 36 мл, C ыдысына 48 мл су жиналды.",
+        "ru": "Во время опыта во дворе школы в сосуд A собрали 24 мл, в сосуд B — 36 мл, в сосуд C — 48 мл.",
+        "en": "In the schoolyard trial, container A collected 24 mL, B collected 36 mL and C collected 48 mL."
+      },
+      "notes": {
+        "kk": "Кесте мен диаграмма бірдей деректі көрсетеді.",
+        "ru": "Таблица и диаграмма показывают одни и те же данные.",
+        "en": "The table and chart describe the same trial."
+      },
+      "evidence": {
+        "kk": [
+          "kk.measurements"
+        ],
+        "ru": [
+          "ru.measurements"
+        ],
+        "en": [
+          "en.measurements"
+        ]
+      }
+    },
+    {
+      "id": "s10",
+      "layout": "image-right",
+      "lessonPart": "homework",
+      "title": {
+        "kk": "Үй тапсырмасы",
+        "ru": "Домашнее задание",
+        "en": "Try it at home"
+      },
+      "body": {
+        "kk": "Өз өлшеу кестеңді жаса.",
+        "ru": "Составьте свою таблицу измерений.",
+        "en": "Make your own measurement table."
+      },
+      "notes": {
+        "kk": "Келесі сабаққа жазбаңды әкел.",
+        "ru": "Принесите записи на следующий урок.",
+        "en": "Bring your record to the next lesson."
+      },
+      "image": {
+        "brief": "An open observation notebook beside an empty measuring cup",
+        "alt": {
+          "kk": "Дәптер мен өлшеуіш ыдыс қатар тұр.",
+          "ru": "Рядом лежат тетрадь и мерный стакан.",
+          "en": "An observation notebook lies beside a measuring cup."
+        },
+        "style": "flat watercolour teaching illustration without lettering",
+        "decorative": false
+      }
+    }
+  ],
+  "avatarVariant": {
+    "applyTo": "all ten video scenes",
+    "variant": "avatar-right",
+    "avatar": [
+      1280,
+      0,
+      640,
+      900
+    ],
+    "subtitle": [
+      96,
+      900,
+      1728,
+      130
+    ],
+    "visibleLabel": [
+      1728,
+      24,
+      160,
+      80
+    ],
+    "content": [
+      72,
+      100,
+      1152,
+      752
+    ],
+    "rectUnits": "x,y,width,height; AI label is its own overlay on reserved background; keep actual person clear of label"
+  },
+  "unsupportedClaimProbe": {
+    "insertVia": "AI edit proposal only; never add to source",
+    "number": "73 %",
+    "quote": "Every container was filled twice.",
+    "expected": "Flag number and copy to notes and verification report; withhold unsupported attribution."
+  },
+  "typographyProbes": {
+    "kkLetters": "Әә Ғғ Ққ Ңң Өө Ұұ Үү Һһ Іі",
+    "kk": "1 000 ₸ · 12,5 % · 5–7 сынып",
+    "ru": "в школе · 1 000 ₸ · 12,5 % · 5–7 классы",
+    "en": "“volume” · 12.5 % · pages 5–7"
+  }
+}

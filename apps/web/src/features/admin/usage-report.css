@@ -1,0 +1,8 @@
+.usage-report{padding:12px clamp(16px,4vw,48px);border-bottom:1px solid var(--border)}
+.usage-report summary{width:fit-content;cursor:pointer;font-weight:600}
+.usage-report form{display:flex;flex-wrap:wrap;align-items:end;gap:12px;margin:16px 0}
+.usage-report label{display:grid;gap:3px;font-size:.85rem}
+.usage-report :is(input,select){max-width:100%;background:var(--background);color:var(--foreground);border:1px solid var(--border);padding:5px}
+.usage-table{overflow-x:auto}.usage-table table{border-collapse:collapse;font-size:.85rem}
+.usage-table :is(td,th){padding:6px;text-align:start;border-bottom:1px solid var(--border)}
+.usage-table caption{text-align:start;font-weight:600;padding-block:5px}

@@ -1,0 +1,34 @@
+{
+  "name": "@sabaq/lesson",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tiptap/core": "3.35.0"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2"
+  },
+  "exports": {
+    "./chart-data": "./src/chart-data.ts",
+    "./free-layout": "./src/free-layout.ts",
+    "./diagram": "./src/diagram.ts",
+    "./coedit": "./src/coedit.ts",
+    "./types": "./src/types.ts",
+    "./fixture": "./src/fixture.ts",
+    "./image-crop": "./src/image-crop.ts",
+    "./image-style": "./src/image-style.ts",
+    "./language-version": "./src/language-version.ts",
+    "./lesson-templates": "./src/lesson-templates.ts",
+    "./outline-edits": "./src/outline-edits.ts",
+    "./quality": "./src/quality.ts",
+    "./rich-text": "./src/rich-text.ts",
+    "./narration": "./src/narration.ts",
+    "./speech-time": "./src/speech-time.ts",
+    "./typography": "./src/typography.ts",
+    "./themes": "./src/themes.ts",
+    "./editing": "./src/editing.ts"
+  }
+}

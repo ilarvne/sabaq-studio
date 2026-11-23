@@ -1,0 +1,50 @@
+.ed-slide-grip {
+  position: absolute;
+  z-index: 1;
+  inset: 7px 7px auto auto;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  color: var(--foreground);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 1px 4px #1418221f;
+  opacity: 0;
+  cursor: grab;
+  touch-action: none;
+}
+.ed-slide-grip[hidden] {
+  display: none;
+}
+.ed-thumb:hover .ed-slide-grip,
+.ed-thumb:focus-within .ed-slide-grip,
+.ed-thumb[aria-current] .ed-slide-grip,
+.ed-thumb[data-dragging] .ed-slide-grip {
+  opacity: 1;
+}
+.ed-thumb[data-dragging] {
+  background: var(--card);
+  box-shadow: 0 5px 16px #14182226;
+}
+.ed-thumb[data-dragging] .ed-slide-grip {
+  cursor: grabbing;
+}
+.ed-thumb-list[data-outline='true'] .ed-thumb:has(.ed-slide-grip:not([hidden])) .ed-thumb-caption {
+  padding-inline-end: 36px;
+}
+.ed-thumb-list[data-outline='true'] .ed-slide-grip {
+  inset-block-start: 50%;
+  translate: 0 -50%;
+}
+@media (pointer: coarse) {
+  .ed-slide-grip {
+    width: 36px;
+    height: 36px;
+  }
+  .ed-thumb:not([aria-current]):not(:focus-within) .ed-slide-grip {
+    visibility: hidden;
+  }
+}

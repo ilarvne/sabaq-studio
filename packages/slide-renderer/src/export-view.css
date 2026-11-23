@@ -1,0 +1,17 @@
+@page { size: 1920px 1080px; margin: 0; }
+:root {
+  --font-ui: "Golos Text Variable", "Golos Text", system-ui, sans-serif;
+  --font-slide: "IBM Plex Sans", "Golos Text Variable", sans-serif;
+  --font-reading: "Noto Serif", Georgia, serif;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+.export-page {
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden;
+  break-inside: avoid;
+}
+.export-page + .export-page { break-before: page; }
+
+.export-page[data-video] { width:100vw; height:100vh; position:relative; }

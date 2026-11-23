@@ -1,0 +1,29 @@
+{
+  "name": "@sabaq/contracts",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@sabaq/lesson": "workspace:*",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "typescript": "7.0.2"
+  },
+  "exports": {
+    "./poll": "./src/poll.ts",
+    "./assistant": "./src/assistant.ts",
+    "./export-file": "./src/export-file.ts",
+    "./library": "./src/library.ts",
+    "./retrieval": "./src/retrieval.ts",
+    "./source-files": "./src/source-files.ts",
+    "./usage": "./src/usage.ts",
+    "./video": "./src/video.ts",
+    "./language-version": "./src/language-version.ts",
+    "./quality": "./src/quality.ts",
+    "./schema": "./src/schema.ts",
+    "./illustrations": "./src/illustrations.ts"
+  }
+}

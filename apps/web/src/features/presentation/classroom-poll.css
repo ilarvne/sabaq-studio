@@ -1,0 +1,12 @@
+.class-poll-teacher {position:relative}
+.class-poll-panel,.class-poll-student form {background:var(--card,white);color:var(--card-foreground,#222);border:1px solid var(--border,#bbb);border-radius:.75rem;padding:1rem;text-align:start}
+.class-poll-panel {position:absolute;inset-inline-end:0;bottom:calc(100% + .5rem);z-index:4;width:min(22rem,86vw);max-height:72vh;overflow:auto}
+.class-poll-panel header,.class-poll-cloud {display:flex;align-items:center;justify-content:space-between;gap:.5rem}
+.class-poll-panel form,.class-poll-student form,.class-poll-panel label,.class-poll-student label {display:grid;gap:.45rem}
+.class-poll-panel form,.class-poll-student form {gap:.8rem}
+.class-poll-panel :is(input,textarea,select),.class-poll-student input:not([type=radio]) {border:1px solid var(--border,#bbb);border-radius:.3rem;padding:.4rem;background:var(--background,white);color:inherit;width:100%}
+.class-poll-code {letter-spacing:.15em}
+.class-poll-cloud {flex-wrap:wrap;justify-content:flex-start;list-style:none;padding:0}
+.class-poll-student {width:min(100% - 2rem,30rem);margin:8vh auto}
+.class-poll-student fieldset {border:0;padding:0}
+.class-poll-student fieldset label {display:flex;align-items:center;gap:.75rem;padding:.6rem}

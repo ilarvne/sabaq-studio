@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
+  <defs>
+    <linearGradient id="paper" x2="1" y2=".5">
+      <stop stop-color="#f3efdc"/><stop offset=".58" stop-color="#ece9ce"/><stop offset="1" stop-color="#d4d8ad"/>
+    </linearGradient>
+    <filter id="grain"><feTurbulence type="fractalNoise" baseFrequency=".62" numOctaves="3" stitchTiles="stitch"/></filter>
+    <g id="leaf">
+      <path d="M0 0C1-4 2-9 5-13l2-1 .4-3.4 2.4-1 .4-3 2.5-1.2 1.4-3.4C17-29 20-30 24-32c-1.7 5.6-2.3 9-4.8 13.4l-2.8 1.5-.6 3.4-3 .9-.9 3-3 1.4-.9 2.9C5-4 2.8-2.4 0 0Z" fill="#527342" stroke="#254f35" stroke-width=".6" stroke-linejoin="round"/>
+      <g fill="none" stroke="#d9dcb0" stroke-linecap="round">
+        <path d="M0-.3Q10.8-10.8 22.8-30" stroke-width=".85"/>
+        <path d="m4.3-5.2.6-4.4m1.2 3.1 4.2-1.2m-2-2.4.9-5m1 2.9 4.3-2.1m-2.4-1.1 1.3-5.7m.8 3 4.4-2.5m-2.2-.9 1.2-4.9" stroke-width=".54"/>
+      </g>
+    </g>
+    <g id="pinna">
+      <path d="M-1 1Q40-6 103-35" fill="none" stroke="#385c39" stroke-width="1.65" stroke-linecap="round"/>
+      <use href="#leaf" transform="translate(4 -1) rotate(-23) scale(.89)"/>
+      <use href="#leaf" transform="translate(6 -1) rotate(65) scale(.83)"/>
+      <use href="#leaf" transform="translate(17 -3.8) rotate(-20) scale(.87)"/>
+      <use href="#leaf" transform="translate(19 -4.2) rotate(65) scale(.81)"/>
+      <use href="#leaf" transform="translate(30 -7.1) rotate(-17) scale(.81)"/>
+      <use href="#leaf" transform="translate(32 -7.6) rotate(63) scale(.73)"/>
+      <use href="#leaf" transform="translate(43 -11.8) rotate(-14) scale(.75)"/>
+      <use href="#leaf" transform="translate(45 -12.2) rotate(60) scale(.65)"/>
+      <use href="#leaf" transform="translate(56 -16.1) rotate(-11) scale(.66)"/>
+      <use href="#leaf" transform="translate(58 -17) rotate(58) scale(.59)"/>
+      <use href="#leaf" transform="translate(68 -20.6) rotate(-7) scale(.57)"/>
+      <use href="#leaf" transform="translate(70 -21.6) rotate(56) scale(.5)"/>
+      <use href="#leaf" transform="translate(78 -25.2) rotate(-3) scale(.47)"/>
+      <use href="#leaf" transform="translate(81 -26.2) rotate(52) scale(.42)"/>
+      <use href="#leaf" transform="translate(87 -29) rotate(2) scale(.35)"/>
+      <use href="#leaf" transform="translate(90 -30) rotate(48) scale(.32)"/>
+      <use href="#leaf" transform="translate(96 -32.1) rotate(24) scale(.35)"/>
+    </g>
+    <g id="fern">
+      <path d="M-7 68Q2 6 12-56 21-124 13-207" fill="none" stroke="#3b5b37" stroke-width="2.4" stroke-linecap="round"/>
+      <use href="#pinna" transform="translate(0 9) rotate(8) scale(1.12 1)"/>
+      <use href="#pinna" transform="translate(1 5) scale(-1.03 1) rotate(-4)"/>
+      <use href="#pinna" transform="translate(5.1 -17) rotate(-1) scale(1.13 .98)"/>
+      <use href="#pinna" transform="translate(5.8 -21) scale(-1.02 .98) rotate(-8)"/>
+      <use href="#pinna" transform="translate(9.4 -44) rotate(-7) scale(1.04 .95)"/>
+      <use href="#pinna" transform="translate(10.4 -48) scale(-.94 .88) rotate(-13)"/>
+      <use href="#pinna" transform="translate(13.1 -70) rotate(-13) scale(.94 .89)"/>
+      <use href="#pinna" transform="translate(13.8 -74) scale(-.85 .86) rotate(-18)"/>
+      <use href="#pinna" transform="translate(15.5 -94) rotate(-18) scale(.83 .85)"/>
+      <use href="#pinna" transform="translate(15.8 -98) scale(-.71 .74) rotate(-24)"/>
+      <use href="#pinna" transform="translate(16.8 -117) rotate(-24) scale(.7)"/>
+      <use href="#pinna" transform="translate(16.7 -120) scale(-.62 .68) rotate(-30)"/>
+      <use href="#pinna" transform="translate(16.8 -136) rotate(-29) scale(.55)"/>
+      <use href="#pinna" transform="translate(16.8 -139) scale(-.49 .55) rotate(-33)"/>
+      <use href="#pinna" transform="translate(16.5 -153) rotate(-34) scale(.44)"/>
+      <use href="#pinna" transform="translate(16.4 -155) scale(-.39 .44) rotate(-38)"/>
+      <use href="#pinna" transform="translate(15.5 -168) rotate(-39) scale(.32)"/>
+      <use href="#pinna" transform="translate(15.4 -170) scale(-.28 .34) rotate(-41)"/>
+      <use href="#pinna" transform="translate(14.5 -180) rotate(-44) scale(.21)"/>
+      <use href="#pinna" transform="translate(14.3 -182) scale(-.2 .24) rotate(-47)"/>
+      <use href="#leaf" transform="translate(13.9 -190) rotate(-29) scale(.54)"/>
+    </g>
+  </defs>
+  <rect width="640" height="360" fill="url(#paper)"/>
+  <use href="#fern" transform="translate(641 365) rotate(-11) scale(1.02)" opacity=".46"/>
+  <use href="#fern" transform="translate(470 307) rotate(18) scale(1.64)"/>
+  <rect width="640" height="360" filter="url(#grain)" opacity=".15" style="mix-blend-mode:multiply"/>
+</svg>

@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
+  <defs>
+    <pattern id="hatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(28)">
+      <path d="M.6 0v5" stroke="#792c26" stroke-width="1.1"/>
+    </pattern>
+    <pattern id="dots" width="5.2" height="5.2" patternUnits="userSpaceOnUse" patternTransform="rotate(-15)">
+      <circle cx="2.6" cy="2.6" r=".7" fill="#7d3031"/>
+    </pattern>
+    <filter id="grain"><feTurbulence type="fractalNoise" baseFrequency=".78" numOctaves="3" stitchTiles="stitch"/></filter>
+    <g id="block">
+      <path d="m0 0 46-25 46 25-46 26z" fill="#ffe1ac"/>
+      <path d="m0 0 46 26v50L0 51z" fill="#e96b4b"/>
+      <path d="m46 26 46-26v51L46 76z" fill="#8f3840"/>
+      <path d="m46 26 46-26v51L46 76z" fill="url(#dots)"/>
+    </g>
+  </defs>
+  <rect width="640" height="360" fill="#f29b77"/>
+  <g stroke="#9f5643" opacity=".32" stroke-width="1" fill="none">
+    <path d="m242 337 403-224m-311 260 327-181M374 81l311 174M314-3l342 190" stroke-dasharray="4 5"/>
+    <circle cx="514" cy="183" r="151" stroke-dasharray="2 6"/>
+  </g>
+  <g transform="translate(25 20)">
+    <path d="m294 250 154 87 147-83-153-85z" fill="#c16a52" opacity=".44"/>
+    <path d="m417 197 53-29 56 31-53 30z" fill="#ffe1a4"/>
+    <path d="m415 197 58 32v109l-58-32z" fill="#df6246"/>
+    <path d="m473 229 54-30v109l-54 30z" fill="#80343e"/>
+    <path d="m473 229 54-30v109l-54 30z" fill="url(#hatch)"/>
+    <g transform="translate(338 191)">
+      <use href="#block" x="92" y="0"/><use href="#block" x="46" y="26"/><use href="#block" x="0" y="51"/>
+    </g>
+    <g transform="translate(335 110)">
+      <path d="M0 96V47a96 96 0 0 1 192 0v49h-48V47a48 48 0 0 0-96 0v49z" fill="#a63e36" transform="matrix(.88 .49 0 1 35 -20)"/>
+      <path d="M0 96V47a96 96 0 0 1 192 0v49h-48V47a48 48 0 0 0-96 0v49z" fill="#f5bc88" transform="matrix(.88 .49 0 1 0 0)"/>
+      <path d="M0 47a96 96 0 0 1 192 0l35-20A96 96 0 0 0 35 27z" transform="matrix(.88 .49 0 1 0 0)" fill="#ffe1ac"/>
+      <path d="m169 141 35-20v49l-35 20z" fill="#87333b"/>
+      <path d="m169 141 35-20v49l-35 20z" fill="url(#hatch)"/>
+    </g>
+    <g transform="translate(448 50)">
+      <path d="M0 51 57-33l49 83-54 29z" fill="#ed7452"/>
+      <path d="M57-33 106 50l-54 29z" fill="#81303c"/>
+      <path d="M57-33 106 50l-54 29z" fill="url(#hatch)"/>
+    </g>
+  </g>
+  <rect width="640" height="360" filter="url(#grain)" opacity=".14" style="mix-blend-mode:multiply"/>
+</svg>
