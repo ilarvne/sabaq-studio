@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { readBounded } from '../media/bounded-response';
 
 export function elevenLabsVoice() {
+  if (process.env.STUDIO_AUTH_MODE === 'gateway') return;
   const key = process.env.ELEVENLABS_API_KEY?.trim();
   const voiceId = process.env.STUDIO_ELEVENLABS_VOICE_ID?.trim() || 'JBFqnCBsd6RMkjVDRZzb';
   return key && /^[A-Za-z\d]{10,40}$/.test(voiceId) ? { key, voiceId } : undefined;
@@ -13,6 +14,7 @@ type SpeechRequest = {
 };
 
 async function requestSpeech(options: SpeechRequest, timed: boolean) {
+  if (process.env.STUDIO_AUTH_MODE === 'gateway') throw new Error('ElevenLabs narration is available only in workstation mode.');
   const text = options.text.trim();
   if (!options.key.trim() || !/^[A-Za-z\d]{10,40}$/.test(options.voiceId) || !text || text.length > 5000) {
     throw new Error('ElevenLabs requires a key, a voice ID, and 1–5,000 characters of narration.');

@@ -7,7 +7,7 @@ import { elevenLabsVoice } from './elevenlabs';
 import { createHostedLectureWorker } from './hosted-lecture-worker';
 
 export async function startBundledLectureWorker() {
-  if (process.env.STUDIO_VIDEO_LOCAL_WORKER !== '1' || process.env.STUDIO_VIDEO_WORKER_URL?.trim()) return;
+  if (process.env.STUDIO_AUTH_MODE === 'gateway' || process.env.STUDIO_VIDEO_LOCAL_WORKER !== '1' || process.env.STUDIO_VIDEO_WORKER_URL?.trim()) return;
 
   const key = process.env.STUDIO_VIDEO_WORKER_KEY?.trim() || randomBytes(32).toString('hex');
   const version = process.env.STUDIO_VIDEO_PIPELINE_VERSION?.trim() || 'lecture-v2-timed-captions';
