@@ -1,14 +1,16 @@
 import { freeIds, freeBounds } from '@sabaq/lesson/free-layout';
 import { diagramAltLimit, diagramKinds, diagramLabelLimit } from '@sabaq/lesson/diagram';
 import { z } from 'zod';
-import { deckThemes, imageModes, imageStyles, maxLessonSlides, slideLayouts, slidePictograms, slideRoles } from '@sabaq/lesson/types';
+import { coverArtworkMotifs, deckThemes, imageModes, imageStyles, maxLessonSlides, maxSlideObjects, slideLayouts, slidePictograms, slideRoles, webResearchModes } from '@sabaq/lesson/types';
 
 const id = z.string().min(1).max(160);
 const single = z.string().max(1000);
 const layout = z.enum(slideLayouts);
 const theme = z.enum(deckThemes);
+export const imageSceneList = z.array(z.string().trim().min(1).max(400)).min(2).max(3)
+  .refine(scenes => new Set(scenes.map(scene => scene.toLowerCase())).size === scenes.length, 'Use distinct scenes for a gallery');
 const outline = z
-  .array(z.object({ id, title: single.min(1), summary: single, purpose:z.string().max(400).optional(), section:z.string().max(160).optional(), visualDescription:z.string().max(400).optional(), narrationDraft:z.string().max(2500).optional(), assessment:z.boolean().optional(), layout, role: z.enum(slideRoles).optional(), sourceExcerptId: id.optional() }))
+  .array(z.object({ id, title: single.min(1), summary: single, purpose:z.string().max(400).optional(), section:z.string().max(160).optional(), visualDescription:z.string().max(400).optional(), imageScenes:imageSceneList.optional(), diagramKind:z.enum(diagramKinds).optional(), narrationDraft:z.string().max(2500).optional(), assessment:z.boolean().optional(), layout, role: z.enum(slideRoles).optional(), sourceExcerptId: id.optional() }))
   .min(1)
   .max(maxLessonSlides)
   .refine(
@@ -98,6 +100,28 @@ const chart = z
   );
 
 const themeColor=z.string().regex(/^#[0-9a-f]{6}$/i);
+const objectPosition = {
+  id: z.uuid(), color: themeColor, x: z.number().min(-50).max(100), y: z.number().min(-50).max(100),
+  w: z.number().min(.1).max(100), h: z.number().min(.1).max(100), rotation: z.number().min(-180).max(180),
+};
+const slideObject = z.discriminatedUnion('kind', [
+  z.object({ ...objectPosition, kind: z.literal('text'), text: z.string().max(600),
+    fontSize: z.number().int().min(12).max(72), bold: z.boolean(), align: z.enum(['left', 'center', 'right']) }).strict(),
+  z.object({ ...objectPosition, kind: z.enum(['rectangle', 'ellipse', 'arrow']) }).strict(),
+]).refine(object => {
+  const box = freeBounds(object);
+  return box.x >= -.01 && box.y >= -.01 && box.x + box.w <= 100.01 && box.y + box.h <= 100.01;
+}, 'Object must fit the slide');
+const slideObjects = z.array(slideObject).max(maxSlideObjects)
+  .refine(objects => new Set(objects.map(object => object.id)).size === objects.length, 'Object IDs must be unique');
+const coverArtwork = z.object({
+  theme: z.enum(deckThemes),
+  objects: z.array(z.object({
+    ...objectPosition, id: z.string().regex(/^cover-art-[1-4]$/), kind: z.literal('artwork'),
+    motif: z.enum(coverArtworkMotifs), paint: z.enum(['fill','stroke']), backdrop: themeColor.optional(),
+  }).strict()).max(4)
+    .refine(objects => new Set(objects.map(object => object.id)).size === objects.length, 'Artwork IDs must be unique'),
+}).strict();
 const typeface=z.string().trim().min(1).max(80).regex(/^[\p{L}\p{N} _.-]+$/u);
 const masterId=z.string().regex(/^m[1-9][0-9]?$/);
 const templateLayoutId=z.string().regex(/^m[1-9][0-9]?-l[1-9][0-9]?$/);
@@ -129,6 +153,7 @@ export const createInput = z.object({
   sourceFileIds: z.array(z.uuid()).min(1).max(10).optional(),
   sourceNotes: z.string().trim().min(1).max(100000).optional(),
   researchQuery: z.string().trim().min(1).max(200).optional(),
+  webResearch: z.enum(webResearchModes).optional(),
   source: z
     .object({
       name: single.min(1),
@@ -150,6 +175,8 @@ export const createInput = z.object({
     ctx.addIssue({code:'custom',path:['sourceFileIds'],message:'Choose either library files or another source mode.'});
   if (data.sourceNotes && !data.sourceFileIds)
     ctx.addIssue({code:'custom',path:['sourceNotes'],message:'Select source files to include notes.'});
+  if (data.webResearch && (data.sourceFileIds || data.source || data.sourceDeckId || data.researchQuery || data.template === 'blank'))
+    ctx.addIssue({code:'custom',path:['webResearch'],message:'Use a standalone public topic for web research.'});
 });
 export const slideChangeFields = z
   .object({
@@ -168,6 +195,8 @@ export const slideChangeFields = z
     chart,
     diagram,
     freeLayout:freeLayout.nullable(),
+    objects: slideObjects,
+    coverArtwork: coverArtwork.nullable(),
     answer: single,
     design: z.object({
       variant: z.enum(slideRoles).optional(),

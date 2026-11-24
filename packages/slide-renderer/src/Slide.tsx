@@ -1,13 +1,13 @@
-import { effectiveFreeLayout, freeIds, hasFreePhotoBackground } from '@sabaq/lesson/free-layout';
+import { effectiveFreeLayout, freeIds, freeImageIds, hasFreePhotoBackground } from '@sabaq/lesson/free-layout';
 import { DiagramGraphic, DiagramPage } from './Diagram';
 import { Fragment, useLayoutEffect, useMemo, useRef, type CSSProperties, type ReactNode } from 'react';
 import { safeHref } from '@sabaq/lesson/rich-text';
 import { displaySlide } from '@sabaq/lesson/typography';
 export { documentRuns, safeHref } from '@sabaq/lesson/rich-text';
 import type { JSONContent } from '@tiptap/core';
-import { isSlideSymbol, slideImages, type Deck, type Layout, type Locale, type Slide, type SlideChart, type SlideTable } from '@sabaq/lesson/types';
+import { isSlideSymbol, slideImages, type CanvasObject, type Deck, type Layout, type Locale, type Slide, type SlideChart, type SlideTable } from '@sabaq/lesson/types';
 import { slideCopy, lessonPartLabel } from './slide-copy';
-import { lessonPalette, powerPointVisualStyle, templateFont } from '@sabaq/lesson/themes';
+import { lessonPalette, powerPointVisualStyle, presentationCoverArtwork, templateFont, usesFramedCover } from '@sabaq/lesson/themes';
 import './canvas.css';
 
 export type TextSlot = 'title' | 'body';
@@ -338,6 +338,7 @@ export interface SlideCanvasProps {
   className?: string;
   onOverflowChange?: (overflows: boolean) => void;
   renderSlot?: (slot: TextSlot, readonlyContent: ReactNode) => ReactNode;
+  renderObject?: (object: CanvasObject, readonlyContent: ReactNode) => ReactNode;
 }
 
 export function SlideCanvas({
@@ -349,17 +350,21 @@ export function SlideCanvas({
   thumbnail = false,
   className = '',
   renderSlot,
+  renderObject,
   onOverflowChange,
 }: SlideCanvasProps) {
   const slide=useMemo(()=>displaySlide(originalSlide, deck.language),[originalSlide,deck.language]);
   const c = slideCopy[lang];
   const isReady = slide.status === 'ready';
   const preset = lessonPalette(deck,slide.powerPointLayoutId);
+  const artwork = presentationCoverArtwork(deck, slide);
+  const framedCover = usesFramedCover(deck.theme);
   const importedStyle=powerPointVisualStyle(deck.powerPointStyle,slide.powerPointLayoutId);
   const canvas = useRef<HTMLElement>(null);
   // Server acknowledgements replace nested objects even when their displayed content is identical.
   const fitContent = useMemo(() => JSON.stringify([
-    slide.richText, slide.bodyRuns, slide.design, slide.image, slide.additionalImages, slide.chart, slide.table, slide.diagram, slide.freeLayout,
+    slide.richText, slide.bodyRuns, slide.design, slide.image, slide.additionalImages, slide.chart, slide.table, slide.diagram,
+    slide.freeLayout?.items.map(({id,w,h})=>[id,w,h]),
   ]), [slide.richText, slide.bodyRuns, slide.design, slide.image, slide.additionalImages, slide.chart, slide.table, slide.diagram, slide.freeLayout]);
   useLayoutEffect(() => {
     const root = canvas.current;
@@ -471,7 +476,8 @@ export function SlideCanvas({
     <img
       key={index}
       className="ed-slide-image"
-      style={asset.crop || isSlideSymbol(asset) ? {objectFit:'contain'} : undefined}
+      data-slide-image={freeImageIds[index]}
+      style={asset.crop || isSlideSymbol(asset) || slide.importedPage ? {objectFit:'contain'} : undefined}
       src={asset.src}
       alt={asset.decorative ? '' : asset.alt}
       draggable={false}
@@ -511,11 +517,9 @@ export function SlideCanvas({
       data-powerpoint-style={deck.powerPointStyle ? true : undefined}
       data-slide-id={slide.id}
       data-has-media={media ? 'true' : 'false'}
-      data-cover-art={
-        slide.layout === 'cover' && !media && slide.title.length <= 64 && slide.body.length <= 135
-          ? 'true'
-          : undefined
-      }
+      data-theme-artwork={artwork.length > 0 && !framedCover || undefined}
+      data-cover-art={artwork.length > 0 && framedCover || undefined}
+      data-editable-artwork={artwork.length > 0 && Boolean(renderObject) || undefined}
       aria-label={slide.title || c.slide}
       style={
         {
@@ -542,18 +546,29 @@ export function SlideCanvas({
     >
       {isReady && slide.importedArtwork && <img className="ed-imported-artwork" src={slide.importedArtwork} alt="" draggable={false}/>}
       {isReady && deck.brand?.logo && <img className="ed-brand-logo" src={deck.brand.logo} alt="" draggable={false}/>}
-      {isReady && freeLayout ? <div className="ed-free-page" data-photo-backdrop={hasFreePhotoBackground(slide,freeLayout) || undefined}>
+      {artwork.length > 0 && <div className="ed-theme-artwork" aria-hidden={renderObject ? undefined : true}>
+        {artwork.map(object => {
+          const visual = <div className="ed-artwork-shape" data-shape={object.motif} data-paint={object.paint} aria-hidden="true" />;
+          return <div key={object.id} className="ed-slide-object ed-artwork-object" data-object-id={object.id} style={{
+            left: `${object.x}%`, top: `${object.y}%`, width: `${object.w}%`, height: `${object.h}%`,
+            transform: `rotate(${object.rotation}deg)`, color: object.color, '--artwork-backdrop': object.backdrop,
+          } as CSSProperties}>{renderObject ? renderObject(object, visual) : visual}</div>;
+        })}
+      </div>}
+      {isReady && freeLayout ? <div className="ed-free-page" data-photo-backdrop={hasFreePhotoBackground(slide,freeLayout) || undefined}
+        data-adaptive-layout={slide.diagram ? 'diagram' : arranged ? 'arranged' : undefined}
+        data-details={arranged ? Boolean(media || slide.design?.cards?.length) : undefined}>
         {freeLayout.items.map((item,z)=>({...item,z})).sort((a,b)=>freeIds.indexOf(a.id)-freeIds.indexOf(b.id)).map(item=>{
           const {id,x,y,w,h,rotation}=item;
           let content:ReactNode;
           switch(id) {
             case 'title': content=<div className="ed-slide-title" role="heading" aria-level={2}>{text('title')}</div>;break;
             case 'body': content=(slide.body || renderSlot) && <div className="ed-slide-body">{text('body')}</div>;break;
-            case 'image': content=image;break;
+            case 'image': case 'image-2': case 'image-3': content=pictures[freeImageIds.indexOf(id)] ?? null;break;
             case 'table': content=slide.table && <DataTable table={slide.table} label={c.table}/>;break;
             case 'chart': content=slide.chart && <Chart chart={slide.chart} label={c.chart} transcript={includeChartData}/>;break;
             case 'diagram': content=slide.diagram && <DiagramGraphic diagram={slide.diagram} language={deck.language}/>;break;
-            case 'eyebrow': content=<div data-story-text className="ed-slide-kicker">{slide.design?.eyebrow || lessonPartLabel(slide.lessonPart,deck.language)}</div>;break;
+            case 'eyebrow': content=<div data-story-text className={slide.design?.variant && !arranged && !slide.diagram ? 'ed-story-eyebrow' : 'ed-slide-kicker'}>{slide.design?.eyebrow || lessonPartLabel(slide.lessonPart,deck.language)}</div>;break;
             case 'answer': content=answer && <div className="ed-slide-answer">{answer}</div>;break;
             case 'takeaway': content=<p data-story-text>{slide.design?.takeaway}</p>;break;
             default: {
@@ -562,7 +577,7 @@ export function SlideCanvas({
               content=card && <div className="ed-free-card"><strong data-story-text>{(slide.design?.numbered ?? (slide.design?.variant==='activity' || slide.design?.variant==='recap')) && (index+1)+'. '}{card.title}</strong><p data-story-text>{card.text}</p></div>;
             }
           }
-          return content ? <div key={id} className="ed-free-element" data-free-id={id}
+          return content ? <div key={id} className="ed-free-element" data-free-id={id} data-empty={id==='body' && !slide.body.trim() || undefined}
             style={{left:x+'%',top:y+'%',width:w+'%',height:h+'%',zIndex:item.z,transform:'rotate('+rotation+'deg)'}}>{content}</div> : null;
         })}
       </div> : isReady && slide.importedPage && slide.layout === 'image-full' && image ? (
@@ -626,6 +641,17 @@ export function SlideCanvas({
           </p>
         </div>
       )}
+      {isReady && Boolean(slide.objects?.length) && <div className="ed-object-layer">
+        {slide.objects?.map(object => {
+          const visual = object.kind === 'text' ? <div className="ed-object-text" style={{
+            fontSize: `${object.fontSize / 9.6}cqw`, fontWeight: object.bold ? 700 : 400, textAlign: object.align,
+          }}>{object.text}</div> : <div className="ed-object-shape" data-shape={object.kind} aria-hidden="true"/>;
+          return <div key={object.id} className="ed-slide-object" style={{
+            left: `${object.x}%`, top: `${object.y}%`, width: `${object.w}%`, height: `${object.h}%`,
+            transform: `rotate(${object.rotation}deg)`, color: object.color,
+          }}>{renderObject ? renderObject(object, visual) : visual}</div>;
+        })}
+      </div>}
     </article>
   );
 }

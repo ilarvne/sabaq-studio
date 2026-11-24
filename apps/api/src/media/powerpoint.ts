@@ -1,6 +1,6 @@
 import { displaySlide } from '@sabaq/lesson/typography';
 import { lessonPartLabel } from '@sabaq/slide-renderer/copy';
-import { effectiveFreeLayout, hasFreePhotoBackground } from '@sabaq/lesson/free-layout';
+import { effectiveFreeLayout, freeImageIds, hasFreePhotoBackground } from '@sabaq/lesson/free-layout';
 import { applyPowerPointDecorations, arrangePowerPointShapes, canReadVisibleTitleFirst, decorativePowerPointName,
   describeNativePowerPointDiagram } from './powerpoint-layout';
 import { diagramDescription, diagramGeometry, diagramNames } from '@sabaq/lesson/diagram';
@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import PptxGenJS from 'pptxgenjs';
 import JSZip from 'jszip';
 import sharp from 'sharp';
-import { lessonPalette, powerPointVisualStyle, templateFont } from '@sabaq/lesson/themes';
+import { lessonPalette, powerPointVisualStyle, presentationCoverArtwork, templateFont } from '@sabaq/lesson/themes';
 import { isSlideSymbol, slideImages, type Deck, type Slide, type SlideImage } from '@sabaq/lesson/types';
 import { generatedImageName } from './visuals';
 
@@ -203,10 +203,10 @@ export async function makePowerPoint(deck:Deck, roots:MediaRoots) {
   const imageCache=new Map<string,Promise<Buffer>>();
   const masters=new Set<string>();
 
-  async function addPicture(target:NativeSlide,source:SlideImage,box:Box,name:string) {
+  async function addPicture(target:NativeSlide,source:SlideImage,box:Box,name:string,contain=false) {
     const path=imagePath(source.src,roots);
     if (!path) throw new Error('Unsupported local slide image.');
-    const fitted=Boolean(source.crop) || isSlideSymbol(source);
+    const fitted=contain || Boolean(source.crop) || isSlideSymbol(source);
     const cacheKey=[path,box.w,box.h,fitted].join(':');
     let image=imageCache.get(cacheKey);
     if (!image) {
@@ -291,6 +291,59 @@ export async function makePowerPoint(deck:Deck, roots:MediaRoots) {
     target.addImage({...wide,x:0,y:0,data:'image/png;base64,'+(await readFile(path)).toString('base64'),
       altText:'',objectName:decorativePowerPointName('Imported slide artwork')});
   }
+  function addCoverOrnaments(target: NativeSlide, slide: Slide) {
+    // PptxGenJS supports custom geometry at runtime. Its public shape enum omits it.
+    const nativePath = 'custGeom' as PptxGenJS.ShapeType;
+    const presetShapes = {rect:pptx.ShapeType.rect, roundRect:pptx.ShapeType.roundRect, ellipse:pptx.ShapeType.ellipse};
+    type Points = NonNullable<PptxGenJS.ShapeProps['points']>;
+    const invisible = {color:'FFFFFF',transparency:100};
+    for (const [index, object] of presentationCoverArtwork(deck, slide).entries()) {
+      const {x,y,w,h,rotation,motif,paint,backdrop} = object;
+      const ink = color(object.color);
+      const box = {x:x*wide.w/100, y:y*wide.h/100, w:w*wide.w/100, h:h*wide.h/100, rotate:(rotation+360)%360};
+      const name = decorativePowerPointName('Cover ornament '+(index+1));
+      const options = {...box,objectName:name};
+      if (motif === 'rect' || motif === 'roundRect' || motif === 'ellipse') {
+        target.addShape(presetShapes[motif], {
+          ...options, fill:paint === 'fill' ? {color:ink} : invisible,
+          line:paint === 'stroke' ? {color:ink,width:1.4} : invisible,
+        });
+      } else if (motif === 'arch') {
+        const arch = Math.min(box.w/2,box.h);
+        const points: Points = [{x:0,y:box.h},{x:0,y:arch},
+          {x:box.w/2,y:0,curve:{type:'quadratic',x1:0,y1:0}},
+          {x:box.w,y:arch,curve:{type:'quadratic',x1:box.w,y1:0}},
+          {x:box.w,y:box.h},{close:true}];
+        target.addShape(nativePath,{...options,points,fill:invisible,line:{color:ink,width:2}});
+      } else if (motif === 'grid') {
+        const gap = .033 * wide.w;
+        const points: Points = [];
+        for (let col = 0; col < box.w; col += gap) points.push({x:col,y:0,moveTo:true},{x:col,y:box.h});
+        for (let row = 0; row < box.h; row += gap) points.push({x:0,y:row,moveTo:true},{x:box.w,y:row});
+        target.addShape(nativePath,{...options,points,fill:invisible,line:{color:ink,width:1}});
+      } else {
+        const lower = motif === 'rings-bottom';
+        const edge = lower ? box.h : 0;
+        const vertical = lower ? -1 : 1;
+        function quarter(scale: number): Points {
+          const k = .5523;
+          const rx = box.w * scale;
+          const ry = box.h * scale * vertical;
+          return [{x:box.w-rx,y:edge,moveTo:true},{x:box.w,y:edge+ry,
+            curve:{type:'cubic',x1:box.w-rx,y1:edge+k*ry,x2:box.w-k*rx,y2:edge+ry}}];
+        }
+        if (backdrop || lower) target.addShape(nativePath,{
+          ...options,objectName:decorativePowerPointName('Cover ornament backing '+(index+1)),
+          points:[...quarter(lower ? Math.min(1,.0625*wide.w/box.w) : 1),{x:box.w,y:edge},{close:true}],
+          fill:{color:lower ? ink : color(backdrop!)},line:invisible,
+        });
+        const count = Math.max(1,Math.round(box.w/(wide.w*.025)));
+        const first = lower ? Math.min(count,Math.floor(.0625*wide.w/box.w*count)+1) : 1;
+        const points = Array.from({length:count-first+1},(_,step) => quarter((first+step)/count)).flat();
+        target.addShape(nativePath,{...options,points,fill:invisible,line:{color:ink,width:.6,transparency:lower ? 44 : 55}});
+      }
+    }
+  }
   const offSlideTitle = { x:-3, y:0, w:2, h:1 };
   const nativeFreeTitle = (slide:Slide, layout:ReturnType<typeof effectiveFreeLayout>) =>
     !!slide.title.trim() && canReadVisibleTitleFirst(layout);
@@ -320,16 +373,22 @@ export async function makePowerPoint(deck:Deck, roots:MediaRoots) {
     target.background={color:paper};
     if (!visibleTitle) addTitleOffSlide(target,slide,index,style);
     await addImportedArtwork(target,slide);
+    addCoverOrnaments(target,slide);
     for(const item of layout.items) {
       const box={x:item.x*wide.w/100,y:item.y*wide.h/100,w:item.w*wide.w/100,h:item.h*wide.h/100};
       const prefix='Free/'+item.id+'/';
-      if (item.id==='image' || item.id==='table' || item.id==='chart' || item.id==='diagram') {
-        const cap=item.id==='diagram' ? Math.min(.43,box.h*.16) : 0;
-        await addMedia(target,slide,{kind:item.id,media:{...box,y:box.y+cap,h:box.h-cap}},style,prefix,cap);
+      if (item.id==='image' || item.id==='image-2' || item.id==='image-3') {
+        const image = slideImages(slide)[freeImageIds.indexOf(item.id)];
+        if (image) await addPicture(target, image, box, prefix+'Slide illustration', slide.importedPage);
         if(item.id==='image' && photoBackground) target.addShape(pptx.ShapeType.rect,{
           ...box,line:{transparency:100},fill:{color:'101C22',transparency:28},
           objectName:decorativePowerPointName(prefix+'Image contrast overlay'),
         });
+        continue;
+      }
+      if (item.id==='table' || item.id==='chart' || item.id==='diagram') {
+        const cap=item.id==='diagram' ? Math.min(.43,box.h*.16) : 0;
+        await addMedia(target,slide,{kind:item.id,media:{...box,y:box.y+cap,h:box.h-cap}},style,prefix,cap);
         continue;
       }
       const options={...box,...text,...(photoBackground && {color:'FFFFFF'}),fontFace,margin:0,fit:'shrink' as const,valign:'top' as const,objectName:prefix+item.id};
@@ -345,9 +404,24 @@ export async function makePowerPoint(deck:Deck, roots:MediaRoots) {
         if(card) target.addText([{text:((slide.design?.numbered ?? (slide.design?.variant==='activity'||slide.design?.variant==='recap')) ? (cardIndex+1)+'. ' : '')+card.title,options:{bold:true,breakLine:true}},{text:card.text}],{...options,color:style.ink,fill:{color:tint},fontSize:22});
       }
     }
+    addSlideObjects(target, slide, fontFace);
     const notes=[slide.notes,slide.answer && answerLabel[deck.language]+': '+slide.answer].filter(Boolean).join('\n\n');
     if(notes) target.addNotes(notes);
     addLogo(target);
+  }
+  function addSlideObjects(target: NativeSlide, slide: Slide, fontFace: string) {
+    const shapes = { rectangle: pptx.ShapeType.rect, ellipse: pptx.ShapeType.ellipse, arrow: pptx.ShapeType.rightArrow };
+    for (const object of slide.objects ?? []) {
+      const box = { x: object.x * wide.w / 100, y: object.y * wide.h / 100,
+        w: object.w * wide.w / 100, h: object.h * wide.h / 100, rotate: (object.rotation + 360) % 360 };
+      if (object.kind === 'text') {
+        target.addText(object.text, { ...box, align: object.align, valign: 'top', bold: object.bold, fontFace,
+          fontSize: object.fontSize, color: color(object.color), margin: 0, objectName: 'Text box' });
+      } else {
+        target.addShape(shapes[object.kind], { ...box, fill: { color: color(object.color) }, line: { transparency: 100 },
+          objectName: decorativePowerPointName(object.kind) });
+      }
+    }
   }
   for (const [index, originalSlide] of deck.slides.entries()) {
     const slide=displaySlide(originalSlide, deck.language);
@@ -362,6 +436,7 @@ export async function makePowerPoint(deck:Deck, roots:MediaRoots) {
       target.addImage({ ...wide, x: 0, y: 0, data: 'image/png;base64,' + (await readFile(path)).toString('base64'),
         altText: slide.image.decorative ? '' : slide.image.alt,
         objectName: slide.image.decorative ? decorativePowerPointName('Imported page') : 'Imported page' });
+      addSlideObjects(target, slide, fontFace);
       if (slide.notes) target.addNotes(slide.notes);
       addLogo(target);
       continue;
@@ -384,6 +459,7 @@ export async function makePowerPoint(deck:Deck, roots:MediaRoots) {
     const target=pptx.addSlide({masterName});
     target.background={color:paper};
     await addImportedArtwork(target,slide);
+    addCoverOrnaments(target,slide);
     if (format.kind === 'background-image') {
       await addMedia(target, slide, { kind: 'image', media: format.media },style);
       target.addShape(pptx.ShapeType.rect, {
@@ -402,13 +478,15 @@ export async function makePowerPoint(deck:Deck, roots:MediaRoots) {
       if ('media' in format && format.media) await addAdaptiveMedia(target,slide,format.media,style);
     }
 
+    addSlideObjects(target, slide, fontFace);
     const notes=[slide.notes,slide.answer&&answerLabel[deck.language]+': '+slide.answer].filter(Boolean).join('\n\n');
     if (notes) target.addNotes(notes);
     addLogo(target);
   }
   const buffer=await pptx.write({outputType:'nodebuffer',compression:true});
   if (!Buffer.isBuffer(buffer)) throw new Error('PowerPoint encoder did not return a buffer.');
-  const needsSlideMetadata=(slide:Slide)=>Boolean(slide.freeLayout || slide.diagram || slide.importedArtwork || logoData ||
+  const needsSlideMetadata=(slide:Slide)=>Boolean(slide.freeLayout || slide.diagram || slide.importedArtwork || logoData || slide.objects?.some(object=>object.kind!=='text') ||
+    presentationCoverArtwork(deck, slide).length ||
     slide.layout==='image-full' && slide.image || slideImages(slide).some(image=>image.decorative));
   if (!deck.powerPointStyle && !deck.slides.some(needsSlideMetadata)) return buffer;
   // Update only parts generated by our writer. Keep original drawings and their relationships intact.

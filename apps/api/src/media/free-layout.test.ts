@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import JSZip from 'jszip';
 import { makeFixtureDeck } from '@sabaq/lesson/fixture';
 import type { Deck } from '@sabaq/lesson/types';
-import { alignFree, effectiveFreeLayout, freeBounds, groupFree, hasFreePhotoBackground, moveFree, resizeFree, selectedGroup, stackFree, transformFree, type FreeLayout } from '@sabaq/lesson/free-layout';
+import { alignFree, effectiveFreeLayout, freeBounds, freeImage, freeLayoutAfterAddingImages, freeLayoutAfterRemovingImage, groupFree, hasFreePhotoBackground, isFreeImageId, moveFree, resizeFree, selectedGroup, selectionBounds, stackFree, transformFree, type FreeLayout } from '@sabaq/lesson/free-layout';
 import { editInput } from '@sabaq/contracts/schema';
 import { createStudioServer } from '../app';
 import { reviewSlides } from '../lessons/quality';
@@ -21,7 +21,7 @@ test('group transforms preserve offsets, respect rotated bounds and snap to othe
   const ids=selectedGroup(group,['body']);
   assert.deepEqual(ids,['title','body']);
   const moved=moveFree(group,ids,24.4,12,true);
-  assert.equal(moved.guides.x,62);
+  assert.deepEqual(moved.guides.x,{position:62,start:32,end:62});
   assert.equal(moved.layout.items[0].x,32);
   assert.equal(moved.layout.items[1].x-moved.layout.items[0].x,20);
   assert.deepEqual(stackFree(group,ids,true).items.map(item=>item.id),['answer','title','body']);
@@ -34,6 +34,25 @@ test('group transforms preserve offsets, respect rotated bounds and snap to othe
     }
     assert.ok(editInput.safeParse({op:{kind:'slide',slideId:'slide',baseVersion:1,changes:{freeLayout:turn}}}).success);
   }
+});
+
+test('guides honor independent tolerances and span the final selection and target',()=>{
+  const layout:FreeLayout={items:[
+    {id:'title',x:10,y:12,w:20,h:12,rotation:0},
+    {id:'body',x:42,y:57,w:10,h:12,rotation:0},
+  ]};
+  const snapped=moveFree(layout,['title'],12.6,.4,{x:.75,y:0});
+  assert.deepEqual(snapped.guides,{x:{position:42,start:12.4,end:69}});
+  assert.deepEqual(snapped.layout.items[0],{...layout.items[0],x:22,y:12.4});
+  const bypassed=moveFree(layout,['title'],12.6,.4,{x:.5,y:0});
+  assert.deepEqual(bypassed.guides,{});
+  assert.equal(bypassed.layout.items[0].x,22.6);
+  const centered=moveFree(layout,['title'],30.3,0,{x:.75,y:0});
+  assert.deepEqual(centered.guides.x,{position:50,start:0,end:100});
+  assert.equal(centered.layout.items[0].x+centered.layout.items[0].w/2,50);
+  const clamped=moveFree(layout,['title'],-50,0,{x:.75,y:0});
+  assert.deepEqual(clamped.guides,{});
+  assert.equal(clamped.layout.items[0].x,0);
 });
 
 test('resizing keeps the opposite edge anchored and alignment treats a group as one object',()=>{
@@ -54,6 +73,66 @@ test('resizing keeps the opposite edge anchored and alignment treats a group as 
   const aligned=alignFree(grouped,['title','body','answer'],'right');
   assert.deepEqual(aligned.items.map(item=>item.x),[35,50,70]);
   assert.equal(aligned.items[0].y,12);
+});
+
+test('a saved photo grid expands in place and individual image geometry persists',async t=>{
+  const app=createStudioServer({dbPath:':memory:'});t.after(()=>app.close());
+  const deck=(await app.inject({method:'POST',url:'/api/decks',payload:{
+    topic:'Field photos',language:'en',template:'blank',provider:'fixture',review:false,
+  }})).json<Deck>();
+  const original=deck.slides[0], url='/api/decks/'+deck.id;
+  const image={src:'/assets/seedling-growth.webp',alt:'A seedling'};
+  const additionalImages=[{...image,alt:'A leaf'},{...image,alt:'A stem'}];
+  const frame={id:'image' as const,x:12,y:37,w:66,h:33,rotation:12};
+  const legacy:FreeLayout={items:[
+    {id:'title',x:6,y:5,w:88,h:17,rotation:0},
+    {id:'body',x:6,y:23,w:88,h:10,rotation:0},
+    frame,
+  ]};
+  const patch=(baseVersion:number,changes:object)=>app.inject({method:'PATCH',url,payload:{
+    op:{kind:'slide',slideId:original.id,baseVersion,changes},
+  }});
+  const previous=await patch(original.version,{body:'Compare the plants.',image,additionalImages,layout:'image-grid',freeLayout:legacy});
+  assert.equal(previous.statusCode,200);
+  const slide=previous.json<Deck>().slides[0];
+  assert.deepEqual(slide.freeLayout,legacy);
+  const layout=effectiveFreeLayout(slide);
+  const pictures=layout.items.filter(item=>isFreeImageId(item.id));
+  assert.deepEqual(pictures.map(item=>item.id),['image','image-2','image-3']);
+  assert.ok(pictures.every(item=>item.rotation===12));
+  const bounds=selectionBounds(pictures), old=freeBounds(frame);
+  assert.ok(Math.abs(bounds.x-old.x)<.002 && Math.abs(bounds.y-old.y)<.002);
+  assert.ok(Math.abs(bounds.w-old.w)<.002 && Math.abs(bounds.h-old.h)<.002);
+  assert.equal(freeImage(slide,'image-2')?.alt,'A leaf');
+  assert.equal(freeImage(slide,'image-3')?.alt,'A stem');
+  const single={...slide,additionalImages:[]};
+  const appended=freeLayoutAfterAddingImages(single,additionalImages);
+  assert.deepEqual(appended?.items.slice(0,legacy.items.length),legacy.items);
+  assert.deepEqual(effectiveFreeLayout({...slide,freeLayout:appended}),appended);
+
+  const onlySecond=moveFree(layout,['image-2'],3,-4,false).layout;
+  const resized=resizeFree(onlySecond,['image-2'],{x:1,y:1},4,3);
+  assert.deepEqual(resized.items.find(item=>item.id==='image'),pictures[0]);
+  assert.deepEqual(resized.items.find(item=>item.id==='image-3'),pictures[2]);
+  assert.notEqual(resized.items.find(item=>item.id==='image-2')?.w,pictures[1].w);
+  const group=groupFree(resized,['image-2','image-3'],randomUUID());
+  const ids=selectedGroup(group,['image-3']);
+  assert.deepEqual(ids,['image-2','image-3']);
+  const lowered=stackFree(group,ids,false);
+  const persisted=await patch(slide.version,{freeLayout:lowered});
+  assert.equal(persisted.statusCode,200);
+  const saved=persisted.json<Deck>().slides[0];
+  assert.deepEqual(saved.freeLayout,lowered);
+  assert.deepEqual(effectiveFreeLayout(saved),lowered);
+
+  const remaining=freeLayoutAfterRemovingImage(saved,'image-2');
+  const removed=await patch(saved.version,{additionalImages:additionalImages.slice(1),freeLayout:remaining});
+  assert.equal(removed.statusCode,200);
+  const updated=removed.json<Deck>().slides[0];
+  const newSlot=updated.freeLayout?.items.find(item=>item.id==='image-2');
+  assert.deepEqual(newSlot,{...lowered.items.find(item=>item.id==='image-3'),id:'image-2'});
+  assert.equal(freeImage(updated,'image-2')?.alt,'A stem');
+  assert.equal(updated.freeLayout?.items.some(item=>item.id==='image-3'),false);
 });
 
 test('a diagram keeps native editable nodes in its chosen split position and a manual photo stays behind the text',async()=>{

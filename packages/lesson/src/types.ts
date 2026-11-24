@@ -1,5 +1,5 @@
-import type { FreeLayout } from './free-layout';
-import type { SlideDiagram } from './diagram';
+import type { FreeBox, FreeLayout } from './free-layout';
+import type { DiagramKind, SlideDiagram } from './diagram';
 import type { ImageCrop } from './image-crop';
 import type { QualityReview } from './quality';
 import type { TranslationReport } from './language-version';
@@ -13,7 +13,7 @@ export const slideLayouts = [
   'quote', 'avatar-right', 'stacked', 'split', 'centered',
 ] as const;
 export type Layout = (typeof slideLayouts)[number];
-export const deckThemes = ['notebook', 'laboratory', 'steppe', 'contrast', 'editorial', 'minimal', 'blueprint', 'midnight', 'museum', 'atlas', 'chalkboard', 'newsprint'] as const;
+export const deckThemes = ['notebook', 'laboratory', 'steppe', 'contrast', 'editorial', 'minimal', 'blueprint', 'midnight', 'museum', 'atlas', 'chalkboard', 'newsprint', 'field-notes', 'collage', 'spotlight', 'strategy', 'signal'] as const;
 export type Theme = (typeof deckThemes)[number];
 export const brandFonts = ['IBM Plex Sans', 'Golos Text Variable', 'Noto Serif'] as const;
 export type OrganizationBrand = {
@@ -54,6 +54,9 @@ export function isSlideSymbol(image:SlideImage) {
 export type SlideTable = { headers: string[]; rows: Value[][] };
 export type SlideChart = { categories: string[]; series: { name: string; values: number[] }[]; alt: string };
 export type ResearchSource = { id: string; title: string; url: string; excerpt: string };
+export const webResearchModes = ['search', 'research'] as const;
+export type WebResearchMode = (typeof webResearchModes)[number];
+export type ResearchFinding = { id: string; heading?: string; statement: string; sourceIds: string[] };
 export type SourceExcerpt = { id: string; url?: string; source: string; start: number; end: number; excerpt: string };
 export const slideRoles = ['opening', 'definition', 'examples', 'reflection', 'activity', 'recap', 'closing'] as const;
 export type SlideRole = (typeof slideRoles)[number];
@@ -65,6 +68,24 @@ export type SlideDesign = {
   takeaway?: string;
   cards?: { title: string; text: string }[];
 };
+export const slideObjectKinds = ['text', 'rectangle', 'ellipse', 'arrow'] as const;
+export const maxSlideObjects = 24;
+export type SlideObjectKind = (typeof slideObjectKinds)[number];
+export type SlideObject = FreeBox & { id: string; color: string } & (
+  | { kind: 'text'; text: string; fontSize: number; bold: boolean; align: 'left' | 'center' | 'right' }
+  | { kind: Exclude<SlideObjectKind, 'text'> }
+);
+export const coverArtworkMotifs = ['rect','roundRect','ellipse','arch','grid','rings-top','rings-bottom','rings-atlas'] as const;
+export type SlideArtwork = FreeBox & {
+  id: string;
+  kind: 'artwork';
+  motif: (typeof coverArtworkMotifs)[number];
+  color: string;
+  paint: 'fill' | 'stroke';
+  backdrop?: string;
+};
+export type CanvasObject = SlideObject | SlideArtwork;
+export type CoverArtwork = { theme: Theme; objects: SlideArtwork[] };
 export type Slide = {
   id: string;
   importedPage?: boolean;
@@ -86,6 +107,8 @@ export type Slide = {
   chart?: SlideChart;
   diagram?: SlideDiagram;
   freeLayout?: FreeLayout|null;
+  objects?: SlideObject[];
+  coverArtwork?: CoverArtwork|null;
   answer?: string;
   design?: SlideDesign;
   evidence?: SourceExcerpt[];
@@ -96,7 +119,7 @@ export function slideImages(slide: Pick<Slide,'image'|'additionalImages'>): Slid
   return [...(slide.image ? [slide.image] : []),...(slide.additionalImages ?? [])];
 }
 export type SpeechProfile = {voice:string; language:Locale; wordsPerMinute:number};
-export type OutlineItem = { purpose?:string; section?:string; visualDescription?:string; narrationDraft?:string; assessment?:boolean; id: string; title: string; summary: string; layout: Layout; role?: SlideRole; sourceExcerptId?: string };
+export type OutlineItem = { purpose?:string; section?:string; visualDescription?:string; imageScenes?:string[]; diagramKind?:DiagramKind; narrationDraft?:string; assessment?:boolean; id: string; title: string; summary: string; layout: Layout; role?: SlideRole; sourceExcerptId?: string };
 export type Deck = {
   themeRecommendation?: import('./themes').ThemeRecommendation;
   speechProfile?:SpeechProfile;
@@ -124,11 +147,11 @@ export type Deck = {
   outlineModerationNotice?: string;
   outline: OutlineItem[];
   slides: Slide[];
-  research?: { query: string; sources?: ResearchSource[] };
+  research?: { query: string; mode?: WebResearchMode; sources?: ResearchSource[]; findings?: ResearchFinding[] };
   source?: { name: string; text: string };
   template?: string;
 };
-export type SlideChanges = Partial<Pick<Slide,'layout'|'title'|'body'|'bodyRuns'|'richText'|'notes'|'image'|'additionalImages'|'table'|'chart'|'diagram'|'freeLayout'|'answer'|'design'|'powerPointLayoutId'>>;
+export type SlideChanges = Partial<Pick<Slide,'layout'|'title'|'body'|'bodyRuns'|'richText'|'notes'|'image'|'additionalImages'|'table'|'chart'|'diagram'|'freeLayout'|'objects'|'coverArtwork'|'answer'|'design'|'powerPointLayoutId'>>;
 export type EditOp =
   | { kind:'slide'; slideId:string; baseVersion:number; changes:SlideChanges }
   | { kind:'deck'; title?:string; theme?:Theme; imageStyle?:ImageStyle|null }
@@ -153,6 +176,7 @@ export type CreateInput = {
   review: boolean;
   template?: string;
   researchQuery?: string;
+  webResearch?: WebResearchMode;
   sourceDeckId?: string;
   source?: {name: string; text: string};
   answers?: { level?:string; duration?:string; image?:string; quiz?:'include'|'omit';

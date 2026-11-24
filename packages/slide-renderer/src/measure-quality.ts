@@ -43,11 +43,14 @@ export function inspectQuality(collectContrast = false): QualityInspection {
     const bounds = slide.getBoundingClientRect();
     const backdrops = '.ed-slide-background,.ed-imported-artwork,.ed-free-page[data-photo-backdrop] > [data-free-id=image]';
     const photoBehindText = !!slide.querySelector(backdrops);
-    const regions = '.ed-slide-title, .ed-slide-body, .ed-slide-answer, [data-story-text], th, td, .ed-chart-labels span, .ed-chart-column b, .ed-diagram-label';
+    const regions = '.ed-slide-title, .ed-slide-body, .ed-slide-answer, [data-story-text], th, td, .ed-chart-labels span, .ed-chart-column b, .ed-diagram-label, .ed-object-text';
     const boxes: { group: Element; rect: DOMRect }[] = [];
     const walker = document.createTreeWalker(slide, NodeFilter.SHOW_TEXT);
     const range = document.createRange();
     if (slide.dataset.overflow === 'true') issues.add('overflow');
+    for (const object of slide.querySelectorAll<HTMLElement>('.ed-object-text')) {
+      if (object.scrollHeight > object.clientHeight + 1 || object.scrollWidth > object.clientWidth + 1) issues.add('overflow');
+    }
     while (walker.nextNode()) {
       const node = walker.currentNode;
       const element = node.parentElement;

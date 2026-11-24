@@ -1,14 +1,28 @@
-import type { Slide } from './types';
+import type { CanvasObject, Slide } from './types';
 
-export const freeIds = ['title','body','eyebrow','card-0','card-1','card-2','takeaway','answer','image','table','chart','diagram'] as const;
+export const freeImageIds = ['image','image-2','image-3'] as const;
+export type FreeImageId = typeof freeImageIds[number];
+export const freeIds = ['title','body','eyebrow','card-0','card-1','card-2','takeaway','answer','image','table','chart','diagram','image-2','image-3'] as const;
 export type FreeId = typeof freeIds[number];
 export type FreeBox = {x:number;y:number;w:number;h:number;rotation:number};
 export type FreeItem = FreeBox & {id:FreeId;group?:string};
 export type FreeLayout = {items:FreeItem[]};
+type Axis = 'x' | 'y';
+type Guide = {position:number;start:number;end:number};
+export type FreeGuides = Partial<Record<Axis,Guide>>;
 export const slideRatio=16/9;
 const rad=(degrees:number)=>degrees*Math.PI/180;
 const round=(n:number)=>Math.round(n*1000)/1000;
 const clamp=(n:number,low:number,high:number)=>Math.max(low,Math.min(high,n));
+
+export function isFreeImageId(id:FreeId):id is FreeImageId {
+  return freeImageIds.some(imageId=>imageId===id);
+}
+
+export function freeImage(slide:Pick<Slide,'image'|'additionalImages'>,id:FreeImageId) {
+  const index=freeImageIds.indexOf(id);
+  return index===0 ? slide.image : slide.additionalImages?.[index-1];
+}
 
 export function freeElements(slide:Slide):FreeId[] {
   if (slide.importedPage) return slide.image ? ['image'] : ['title'];
@@ -17,7 +31,7 @@ export function freeElements(slide:Slide):FreeId[] {
   (slide.design?.cards ?? []).slice(0,3).forEach((_,i)=>ids.push(freeIds[3+i]));
   if(slide.design?.takeaway) ids.push('takeaway');
   if(slide.answer) ids.push('answer');
-  if(slide.image) ids.push('image');
+  ids.push(...freeImageIds.filter(id=>freeImage(slide,id)));
   if(slide.table) ids.push('table');
   if(slide.chart) ids.push('chart');
   if(slide.diagram) ids.push('diagram');
@@ -41,10 +55,39 @@ export function fitFreeBox<T extends FreeBox>(item:T):T {
   return {...item,x:round(cx-w/2),y:round(cy-h/2),w:round(w),h:round(h),rotation};
 }
 
+export function fitCanvasObject<T extends CanvasObject>(object: T): T {
+  if (object.kind !== 'artwork') return fitFreeBox(object);
+  const w = clamp(object.w,.1,100);
+  const h = clamp(object.h,.1,100);
+  return { ...object, w, h,
+    x: round(clamp(object.x, -w/2, 100-w/2)),
+    y: round(clamp(object.y, -h/2, 100-h/2)),
+    rotation: round(((object.rotation+180)%360+360)%360-180),
+  };
+}
+
+function splitLegacyImageFrame(frame:FreeItem,ids:FreeImageId[]) {
+  // The saved frame contained every picture. Keep its gap, center, angle, and layer order.
+  const gap=Math.min(1.1,frame.w/(ids.length*2));
+  const width=(frame.w-gap*(ids.length-1))/ids.length;
+  const angle=rad(frame.rotation);
+  return ids.map((id,index)=>{
+    const distance=(width+gap)*index+(width-frame.w)/2;
+    return {...frame,id,w:round(width),
+      x:round(frame.x+(frame.w-width)/2+distance*Math.cos(angle)),
+      y:round(frame.y+distance*Math.sin(angle)*slideRatio)};
+  });
+}
+
 // Saved geometry uses percentages of a 16:9 canvas. Existing elements can be added or removed by subsequent content edits.
 export function effectiveFreeLayout(slide:Slide):FreeLayout {
   const ids=freeElements(slide);
-  const saved=slide.freeLayout?.items.filter(item=>ids.includes(item.id)) ?? [];
+  let saved=slide.freeLayout?.items.filter(item=>ids.includes(item.id)) ?? [];
+  const images=ids.filter(isFreeImageId);
+  const frame=saved.find(item=>item.id==='image');
+  if(images.length>1 && frame && frame.w>=.6 && !saved.some(item=>item.id==='image-2' || item.id==='image-3')) {
+    saved=saved.flatMap(item=>item===frame ? splitLegacyImageFrame(frame,images) : [item]);
+  }
   const missing=ids.filter(id=>!saved.some(item=>item.id===id));
   const defaults=ids.filter(id=>id!=='title');
   const cols=defaults.length>4 ? 3 : defaults.length>1 ? 2 : 1;
@@ -54,6 +97,24 @@ export function effectiveFreeLayout(slide:Slide):FreeLayout {
     const pos=defaults.indexOf(id);
     return {id,x:5+(pos%cols)*91/cols,y:26+Math.floor(pos/cols)*69/rows,w:91/cols-3,h:69/rows-3,rotation:0};
   })]};
+}
+
+export function freeLayoutAfterRemovingImage(slide:Slide,id:FreeImageId):FreeLayout|undefined {
+  if(!slide.freeLayout) return;
+  const removedIndex=freeImageIds.indexOf(id);
+  return {items:effectiveFreeLayout(slide).items.flatMap(item=>{
+    if(item.id===id) return [];
+    const index=isFreeImageId(item.id) ? freeImageIds.indexOf(item.id) : -1;
+    return index>removedIndex ? [{...item,id:freeImageIds[index-1]}] : [item];
+  })};
+}
+
+export function freeLayoutAfterAddingImages(slide:Slide,additionalImages:NonNullable<Slide['additionalImages']>):FreeLayout|undefined {
+  if(!slide.freeLayout || additionalImages.length<=(slide.additionalImages?.length ?? 0)) return;
+  const existing=effectiveFreeLayout(slide);
+  const defaults=effectiveFreeLayout({...slide,additionalImages,freeLayout:null});
+  const added=defaults.items.filter(item=>isFreeImageId(item.id) && !existing.items.some(previous=>previous.id===item.id));
+  return {items:[...existing.items,...added]};
 }
 
 export function selectionBounds(items:FreeItem[]) {
@@ -67,26 +128,61 @@ export function selectedGroup(layout:FreeLayout,ids:FreeId[]) {
   return layout.items.filter(item=>ids.includes(item.id) || item.group && groups.has(item.group)).map(item=>item.id);
 }
 
-export function moveFree(layout:FreeLayout,ids:FreeId[],dx:number,dy:number,snap:boolean) {
-  const picked=layout.items.filter(item=>ids.includes(item.id));
-  if(!picked.length) return {layout,guides:{} as {x?:number;y?:number}};
-  const b=selectionBounds(picked);
-  const peers=layout.items.filter(item=>!ids.includes(item.id)).map(freeBounds);
-  const guides:{x?:number;y?:number}={};
-  function shift(axis:'x'|'y',size:'w'|'h',delta:number) {
-    const origins=[b[axis],b[axis]+b[size]/2,b[axis]+b[size]];
-    const lines=[0,50,100,...peers.flatMap(p=>[p[axis],p[axis]+p[size]/2,p[axis]+p[size]])];
-    let distance=1.35, result=delta;
-    if(snap) for(const from of origins) for(const line of lines) {
-      const adjustment=line-from-delta;
-      if(Math.abs(adjustment)<distance) {distance=Math.abs(adjustment);result=delta+adjustment;guides[axis]=line;}
-    }
-    const clamped=clamp(result,-b[axis],100-b[axis]-b[size]);
-    if(Math.abs(clamped-result)>.001) delete guides[axis];
-    return clamped;
+function groupedItems(items:FreeItem[]) {
+  const groups=new Map<string,FreeItem[]>();
+  for(const item of items) {
+    const key=item.group?'group:'+item.group:item.id;
+    const group=groups.get(key) ?? [];
+    group.push(item);
+    groups.set(key,group);
   }
-  const x=shift('x','w',dx), y=shift('y','h',dy);
-  return {layout:{items:layout.items.map(item=>ids.includes(item.id) ? {...item,x:round(item.x+x),y:round(item.y+y)} : item)},guides};
+  return groups;
+}
+
+export function moveFree(
+  layout:FreeLayout,ids:FreeId[],dx:number,dy:number,snap:boolean|Record<Axis,number>,
+):{layout:FreeLayout;guides:FreeGuides} {
+  const picked=layout.items.filter(item=>ids.includes(item.id));
+  if(!picked.length) return {layout,guides:{}};
+  const moving=selectionBounds(picked);
+  const peers=snap ? [...groupedItems(layout.items.filter(item=>!ids.includes(item.id))).values()].map(selectionBounds) : [];
+  const canvas={x:0,y:0,w:100,h:100};
+
+  function movement(axis:Axis,delta:number) {
+    const size=axis==='x'?'w':'h';
+    const minimum=-moving[axis], maximum=100-moving[axis]-moving[size];
+    const tolerance=typeof snap==='boolean' ? (snap ? 1.35 : 0) : snap[axis];
+    let distance=tolerance, result=clamp(delta,minimum,maximum);
+    let target:{position:number;peer:typeof moving}|undefined;
+    if(tolerance>0) for(const peer of [canvas,...peers]) {
+      for(const fraction of [0,0.5,1]) {
+        const position=peer[axis]+peer[size]*fraction;
+        for(const anchor of [0,0.5,1]) {
+          const alignedDelta=position-moving[axis]-moving[size]*anchor;
+          const difference=Math.abs(alignedDelta-delta);
+          if(difference>=distance || alignedDelta<minimum-1e-6 || alignedDelta>maximum+1e-6) continue;
+          result=clamp(alignedDelta,minimum,maximum);
+          distance=difference;
+          target={position,peer};
+        }
+      }
+    }
+    return {delta:result,target};
+  }
+
+  const x=movement('x',dx), y=movement('y',dy);
+  const guides:FreeGuides={};
+  for(const [axis,along,across] of [['x',x,y],['y',y,x]] as const) {
+    if(!along.target) continue;
+    const {position,peer}=along.target;
+    const crossAxis=axis==='x'?'y':'x', crossSize=axis==='x'?'h':'w';
+    const start=Math.min(moving[crossAxis]+across.delta,peer[crossAxis]);
+    const end=Math.max(moving[crossAxis]+moving[crossSize]+across.delta,peer[crossAxis]+peer[crossSize]);
+    guides[axis]={position,start:clamp(start,0,100),end:clamp(end,0,100)};
+  }
+  if(!x.delta && !y.delta) return {layout,guides};
+  return {layout:{items:layout.items.map(item=>ids.includes(item.id) ?
+    {...item,x:round(item.x+x.delta),y:round(item.y+y.delta)} : item)},guides};
 }
 
 export function transformFree(layout:FreeLayout,ids:FreeId[],change:{scaleX?:number;scaleY?:number;degrees?:number}) {
@@ -160,13 +256,7 @@ export type FreeAlignment='left'|'center'|'right'|'top'|'middle'|'bottom';
 export function alignFree(layout:FreeLayout,ids:FreeId[],alignment:FreeAlignment):FreeLayout {
   const picked=layout.items.filter(item=>ids.includes(item.id));
   if(!picked.length) return layout;
-  const groups=new Map<string,FreeItem[]>();
-  for(const item of picked) {
-    const key=item.group?'group:'+item.group:item.id;
-    const group=groups.get(key) ?? [];
-    group.push(item);
-    groups.set(key,group);
-  }
+  const groups=groupedItems(picked);
   const axis=['left','center','right'].includes(alignment)?'x':'y';
   const size=axis==='x'?'w':'h';
   const offset=alignment==='center'||alignment==='middle'?.5:alignment==='right'||alignment==='bottom'?1:0;

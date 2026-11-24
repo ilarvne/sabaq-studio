@@ -63,6 +63,7 @@ export function displaySlide(slide:Slide, locale:Locale):Slide {
     ...(bodyRuns && {bodyRuns}),...(slide.richText && {richText:{
       ...(slide.richText.title && {title:rich(slide.richText.title)}),...(slide.richText.body && {body:rich(slide.richText.body)})}}),
     ...(slide.answer && {answer:format(slide.answer)}),
+    ...(slide.objects && {objects:slide.objects.map(object=>object.kind==='text' ? {...object,text:format(object.text)} : object)}),
     ...(slide.design && {design:{...slide.design,...(slide.design.eyebrow && {eyebrow:format(slide.design.eyebrow)}),
       ...(slide.design.takeaway && {takeaway:format(slide.design.takeaway)}),
       ...(slide.design.cards && {cards:slide.design.cards.map(card=>({title:format(card.title),text:format(card.text)}))})}}),

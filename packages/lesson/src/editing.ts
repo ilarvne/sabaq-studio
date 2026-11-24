@@ -1,4 +1,5 @@
 import { diagramNames } from './diagram';
+import { freeLayoutAfterAddingImages } from './free-layout';
 import { maxLessonSlides, type Deck, type EditOp, type Slide, type SlideChanges } from './types';
 
 export type AssistantOperation =
@@ -36,12 +37,11 @@ export function applyLessonEdit(
     if (changes.powerPointLayoutId && (!templateLayout || changes.layout && changes.layout!==templateLayout.layout))
       throw new LessonEditError('invalid','Choose a layout from this presentation’s PowerPoint design.');
     const additionalImages=changes.additionalImages ?? slide.additionalImages;
-    if (additionalImages?.length && (!(changes.image || slide.image) || slide.importedPage ||
-        changes.chart || changes.table || changes.diagram || slide.chart || slide.table || slide.diagram)) {
-      throw new LessonEditError('invalid', 'Use an image grid on a slide without an import, chart, table, or diagram.');
+    if (additionalImages?.length && (!(changes.image || slide.image) || slide.importedPage || changes.diagram || slide.diagram)) {
+      throw new LessonEditError('invalid', 'Use an image grid on a slide with a primary image and without imported artwork or a diagram.');
     }
     if ((changes.diagram || slide.diagram) && (changes.image || changes.chart || changes.table ||
-        (changes.diagram && (slide.image || slide.chart || slide.table || slide.design)))) {
+        (changes.diagram && (slide.image || slide.chart || slide.table || (!slide.diagram && slide.design))))) {
       throw new LessonEditError('invalid', 'Add the diagram on a separate slide.');
     }
     if (changes.body !== undefined && changes.body !== slide.body) {
@@ -50,7 +50,10 @@ export function applyLessonEdit(
     }
     if (changes.title !== undefined && changes.title !== slide.title && !changes.richText?.title && slide.richText)
       delete slide.richText.title;
+    const addedImageLayout = changes.freeLayout === undefined && changes.additionalImages
+      ? freeLayoutAfterAddingImages(slide, changes.additionalImages) : undefined;
     Object.assign(slide, changes);
+    if (addedImageLayout) slide.freeLayout = addedImageLayout;
     if (templateLayout) slide.layout=templateLayout.layout;
     else if (changes.layout || changes.powerPointLayoutId===null) delete slide.powerPointLayoutId;
     slide.version++;

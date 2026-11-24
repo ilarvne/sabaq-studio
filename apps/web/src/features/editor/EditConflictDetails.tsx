@@ -5,19 +5,19 @@ const labels = {
   en: {
     compare: 'Compare the two edits', yours: 'Your edit', saved: 'Saved version',
     title: 'Slide title', body: 'Slide text', notes: 'Speaker notes', layout: 'Layout', freeLayout: 'Free layout',
-    image: 'Image', additionalImages: 'Image grid', table: 'Table', chart: 'Chart', diagram: 'Diagram',
+    image: 'Image', additionalImages: 'Image grid', table: 'Table', chart: 'Chart', diagram: 'Diagram', objects: 'Canvas objects', coverArtwork: 'Cover artwork',
     answer: 'Answer', design: 'Content blocks', powerPointLayoutId: 'PowerPoint layout',
   },
   ru: {
     compare: 'Сравнить правки', yours: 'Ваша правка', saved: 'Сохранённая версия',
     title: 'Заголовок слайда', body: 'Текст слайда', notes: 'Заметки докладчика', layout: 'Макет', freeLayout: 'Свободный макет',
-    image: 'Изображение', additionalImages: 'Сетка изображений', table: 'Таблица', chart: 'Диаграмма', diagram: 'Схема',
+    image: 'Изображение', additionalImages: 'Сетка изображений', table: 'Таблица', chart: 'Диаграмма', diagram: 'Схема', objects: 'Объекты слайда', coverArtwork: 'Декор обложки',
     answer: 'Ответ', design: 'Блоки содержимого', powerPointLayoutId: 'Макет PowerPoint',
   },
   kk: {
     compare: 'Екі өзгерісті салыстыру', yours: 'Сіздің өзгерісіңіз', saved: 'Сақталған нұсқа',
     title: 'Слайд тақырыбы', body: 'Слайд мәтіні', notes: 'Баяндамашы жазбалары', layout: 'Орналасу', freeLayout: 'Еркін орналасу',
-    image: 'Сурет', additionalImages: 'Суреттер торы', table: 'Кесте', chart: 'Диаграмма', diagram: 'Сұлба',
+    image: 'Сурет', additionalImages: 'Суреттер торы', table: 'Кесте', chart: 'Диаграмма', diagram: 'Сұлба', objects: 'Слайдтағы нысандар', coverArtwork: 'Мұқаба өрнегі',
     answer: 'Жауап', design: 'Мазмұн блоктары', powerPointLayoutId: 'PowerPoint макеті',
   },
 };

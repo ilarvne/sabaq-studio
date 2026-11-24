@@ -1,8 +1,11 @@
 import { brandContrast, lessonPalette } from './themes';
 import type { Deck, ImageStyle, Locale, Theme } from './types';
 
-const defaults: Partial<Record<Theme,ImageStyle>> = {
-  notebook:'watercolor',laboratory:'schematic',blueprint:'schematic',contrast:'photograph',
+const defaults: Record<Theme,ImageStyle> = {
+  notebook:'watercolor',laboratory:'schematic',steppe:'watercolor',contrast:'photograph',
+  editorial:'illustration',minimal:'schematic',blueprint:'schematic',midnight:'illustration',
+  museum:'photograph',atlas:'watercolor',chalkboard:'schematic',newsprint:'photograph',
+  'field-notes':'photograph',collage:'illustration',spotlight:'photograph',strategy:'illustration',signal:'schematic',
 };
 
 export const imageStyleNames: Record<Locale,Record<ImageStyle,string>> = {
