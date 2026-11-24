@@ -15,7 +15,7 @@ export const researchCopy = {
   en: {
     tools: 'Web tools', web: 'Web', toggle: 'Search the web', depth: 'Research depth', search: 'Web search', research: 'Deep research',
     searchHint: 'Find relevant public sources.', researchHint: 'Compare evidence across sources.',
-    disclosure: 'Exa searches your public question. AlemLLM writes the answer.', authoringDisclosure: 'Exa searches the public topic. AlemLLM writes the lesson.',
+    disclosure: 'Exa searches your public question. AlemLLM writes the answer.',
     unavailable: 'Exa is unavailable in this workspace.',
     modelUnavailable: 'Web research for lessons requires AlemLLM.',
     conflicting: 'Clear files, library search, or the selected-text request to use web tools.',
@@ -26,7 +26,7 @@ export const researchCopy = {
   ru: {
     tools: 'Веб-инструменты', web: 'Веб', toggle: 'Искать в интернете', depth: 'Глубина исследования', search: 'Веб-поиск', research: 'Исследование',
     searchHint: 'Найти открытые источники.', researchHint: 'Сопоставить данные из разных источников.',
-    disclosure: 'Exa ищет источники по вашему запросу. AlemLLM пишет ответ.', authoringDisclosure: 'Exa ищет по открытой теме. AlemLLM пишет урок.',
+    disclosure: 'Exa ищет источники по вашему запросу. AlemLLM пишет ответ.',
     unavailable: 'Exa недоступна в этом рабочем пространстве.',
     modelUnavailable: 'Для создания урока с веб-исследованием нужен AlemLLM.',
     conflicting: 'Чтобы искать в интернете, уберите файлы, отключите поиск по библиотеке или завершите запрос по выделенному тексту.',
@@ -37,7 +37,7 @@ export const researchCopy = {
   kk: {
     tools: 'Веб құралдары', web: 'Веб', toggle: 'Интернеттен іздеу', depth: 'Зерттеу тереңдігі', search: 'Веб іздеу', research: 'Терең зерттеу',
     searchHint: 'Ашық дереккөздерді табу.', researchHint: 'Әртүрлі дереккөздердің мәліметтерін салыстыру.',
-    disclosure: 'Exa ашық сұрағыңыз бойынша іздейді. AlemLLM жауап жазады.', authoringDisclosure: 'Exa ашық тақырып бойынша іздейді. AlemLLM сабақ мәтінін жазады.',
+    disclosure: 'Exa ашық сұрағыңыз бойынша іздейді. AlemLLM жауап жазады.',
     unavailable: 'Бұл жұмыс кеңістігінде Exa қолжетімсіз.',
     modelUnavailable: 'Веб-зерттеумен сабақ жасау үшін AlemLLM қажет.',
     conflicting: 'Веб құралдарын қолдану үшін файлдарды алып тастаңыз, кітапханадан іздеуді өшіріңіз немесе таңдалған мәтін бойынша сұрауды аяқтаңыз.',
@@ -98,7 +98,7 @@ export function AssistantResearchMenu({locale, mode, available, modelAvailable =
   const status = !available ? t.unavailable
     : !modelAvailable ? t.modelUnavailable
     : conflicting ? surface === 'authoring' ? t.authoringConflict : t.conflicting
-    : surface === 'authoring' ? t.authoringDisclosure : t.disclosure;
+    : surface === 'assistant' ? t.disclosure : undefined;
   return <Popover>
     <PopoverTrigger render={<Button variant={mode ? 'secondary' : 'ghost'} size="xs" className={cn('as-research-trigger',className)} />} disabled={disabled}
       aria-label={mode ? `${t.tools} · ${t[mode]}` : t.tools} title={t.tools}>
@@ -117,7 +117,7 @@ export function AssistantResearchMenu({locale, mode, available, modelAvailable =
         selectedKey={mode} disabled={disabled || blocked || !mode}
         onSelect={value => { if (isWebResearchMode(value)) onModeChange(value); }}/>
       {mode && !blocked && <p className="as-depth-hint">{mode === 'search' ? t.searchHint : t.researchHint}</p>}
-      <p className="as-research-disclosure">{status}</p>
+      {status && <p className="as-research-disclosure">{status}</p>}
     </PopoverContent>
   </Popover>;
 }
