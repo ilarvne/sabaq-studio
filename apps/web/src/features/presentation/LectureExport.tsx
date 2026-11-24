@@ -4,7 +4,7 @@ import {
   DeviceMobileIcon, DownloadSimpleIcon, FilmStripIcon, InfoIcon, MonitorIcon, NotePencilIcon, PlayIcon,
   SquareIcon, VideoCameraIcon, WarningCircleIcon, XIcon,
 } from '@phosphor-icons/react';
-import { framePercent, videoFrame, videoSizes, type VideoAspect, type VideoJob, type VideoSettings, type VideoState } from '@sabaq/contracts/video';
+import { framePercent, videoFrame, videoSizes, type VideoAspect, type VideoJob, type VideoJobFailure, type VideoSettings, type VideoState } from '@sabaq/contracts/video';
 import { formatSpeechTime, speechSeconds } from '@sabaq/lesson/speech-time';
 import { lessonPalette } from '@sabaq/lesson/themes';
 import type { Deck, Locale } from '@sabaq/lesson/types';
@@ -26,7 +26,7 @@ const formats = [
 
 const localeCopy = {
   en: {
-    title: 'Export video', preview: 'Slide preview', playback: 'Exported video', options: 'Video settings',
+    title: 'Export video', preview: 'Slide preview', playback: 'Exported video', options: 'Video settings', slideCount: 'slides',
     format: 'Video format', language: 'Narration language', subtitles: 'Subtitles', subtitleHint: 'Timed to the narration',
     reveal: 'Reveal by paragraph', revealHint: 'Show slide elements as the notes are read.',
     imported: 'Imported images play as a single frame.', notes: 'Speaker notes', silent: 'This slide plays without narration.',
@@ -38,7 +38,7 @@ const localeCopy = {
     failed: 'Export failed', cancelled: 'Export cancelled', progress: 'Video export progress',
   },
   ru: {
-    title: 'Экспорт видео', preview: 'Предпросмотр слайда', playback: 'Готовое видео', options: 'Параметры видео',
+    title: 'Экспорт видео', preview: 'Предпросмотр слайда', playback: 'Готовое видео', options: 'Параметры видео', slideCount: 'слайдов',
     format: 'Формат видео', language: 'Язык озвучки', subtitles: 'Субтитры', subtitleHint: 'Синхронизированы с озвучкой',
     reveal: 'Показ по абзацам', revealHint: 'Элементы слайда появляются по ходу озвучки.',
     imported: 'Импортированные изображения показываются целиком.', notes: 'Заметки докладчика', silent: 'Этот слайд будет показан без озвучки.',
@@ -50,7 +50,7 @@ const localeCopy = {
     failed: 'Ошибка экспорта', cancelled: 'Экспорт отменён', progress: 'Ход экспорта видео',
   },
   kk: {
-    title: 'Бейнені экспорттау', preview: 'Слайдты алдын ала көру', playback: 'Дайын бейне', options: 'Бейне параметрлері',
+    title: 'Бейнені экспорттау', preview: 'Слайдты алдын ала көру', playback: 'Дайын бейне', options: 'Бейне параметрлері', slideCount: 'слайд',
     format: 'Бейне пішімі', language: 'Баяндау тілі', subtitles: 'Субтитрлер', subtitleHint: 'Баяндаумен синхрондалады',
     reveal: 'Абзац бойынша көрсету', revealHint: 'Жазбалар оқылған сайын слайд элементтері пайда болады.',
     imported: 'Импортталған кескіндер бір кадрда толығымен көрсетіледі.', notes: 'Баяндамашы жазбалары', silent: 'Бұл слайд дыбыстаусыз көрсетіледі.',
@@ -64,6 +64,43 @@ const localeCopy = {
 };
 
 const isActive = (job?: VideoJob) => job?.status === 'queued' || job?.status === 'running' || job?.status === 'verifying';
+
+const failureCopy = {
+  en: {
+    slide: 'Slide', retry: 'Try the export again.',
+    prepare: 'Could not prepare the saved revision. Reopen video export and try again.',
+    render: 'Could not render this slide. Review its layout and try again.',
+    scene: 'Could not create this video scene. Review the speaker notes and try again.',
+    assemble: 'Could not assemble the MP4. Try the export again.',
+    verify: 'The MP4 failed verification. Try generating a new export.',
+    publish: 'Could not make the MP4 available. Reopen video export and try again.',
+  },
+  ru: {
+    slide: 'Слайд', retry: 'Попробуйте экспортировать видео ещё раз.',
+    prepare: 'Не удалось подготовить сохранённую версию. Откройте экспорт заново и повторите попытку.',
+    render: 'Не удалось отрисовать слайд. Проверьте его разметку и повторите попытку.',
+    scene: 'Не удалось создать сцену. Проверьте заметки докладчика и повторите попытку.',
+    assemble: 'Не удалось собрать MP4. Повторите экспорт.',
+    verify: 'MP4 не прошёл проверку. Попробуйте создать видео заново.',
+    publish: 'Не удалось предоставить доступ к MP4. Откройте экспорт заново и повторите попытку.',
+  },
+  kk: {
+    slide: 'Слайд', retry: 'Бейнені қайта экспорттап көріңіз.',
+    prepare: 'Сақталған нұсқаны дайындау мүмкін болмады. Бейне экспортын қайта ашып көріңіз.',
+    render: 'Слайдты бейнелеу мүмкін болмады. Орналасуын тексеріп, қайта көріңіз.',
+    scene: 'Бейне көрінісін жасау мүмкін болмады. Баяндамашы жазбаларын тексеріп, қайта көріңіз.',
+    assemble: 'MP4 файлын құрастыру мүмкін болмады. Экспортты қайталаңыз.',
+    verify: 'MP4 файлы тексерістен өтпеді. Бейнені қайта жасап көріңіз.',
+    publish: 'MP4 файлы қолжетімсіз. Бейне экспортын қайта ашып көріңіз.',
+  },
+};
+
+function describeFailure(locale: Locale, failure?: VideoJobFailure) {
+  const copy = failureCopy[locale];
+  if (!failure) return copy.retry;
+  const detail = copy[failure.stage] || copy.retry;
+  return failure.slide ? `${copy.slide} ${new Intl.NumberFormat(locale).format(failure.slide)} · ${detail}` : detail;
+}
 
 export function LectureExport({ deck, locale, slideId, onClose }: {
   deck: Deck; locale: Locale; slideId?: string; onClose: () => void;
@@ -152,8 +189,9 @@ export function LectureExport({ deck, locale, slideId, onClose }: {
   const checking = !worker && !connectionError;
   const unavailable = worker?.enabled === false || connectionError;
   const status = shownStatus ? copy[shownStatus] : unavailable ? copy.unavailable : undefined;
+  const exportFailure = shownStatus === 'failed' ? describeFailure(locale, job?.failure) : undefined;
   const warning = requestError ? copy.actionError : connectionError ? copy.serviceError
-    : !complete ? copy.incomplete : !hasNotes ? copy.noNotes : undefined;
+    : exportFailure ?? (!complete ? copy.incomplete : !hasNotes ? copy.noNotes : undefined);
 
   return <div className="lecture-export">
     <header className="lecture-header">
@@ -183,12 +221,15 @@ export function LectureExport({ deck, locale, slideId, onClose }: {
           </div>
         </div>
         <div className="lecture-stage" data-aspect={aspect}>
-          {playback && file ? <video className="lecture-frame" controls autoPlay playsInline src={`${file}?play=1`} aria-label={copy.playback}/>
-            : slide ? <div className="lecture-frame" style={{ aspectRatio: `${frame.width}/${frame.height}`, background: lessonPalette(deck).paper }}>
+          {slide ? <div className="lecture-frame" style={{ aspectRatio: `${frame.width}/${frame.height}`, background: lessonPalette(deck).paper }}>
+            {playback && file ? <video className="lecture-player" controls autoPlay playsInline src={`${file}?play=1`} aria-label={copy.playback}/>
+              : <>
               <VideoSlide deck={deck} slide={slide} lang={locale} settings={settings} revealAnswer={false}/>
+              <div className="lecture-mark-band" style={{ height: framePercent(frame.labelBox, frame).height }} aria-hidden="true"/>
               <div className="lecture-ai" style={framePercent(frame.labelBox, frame)} aria-hidden="true">ИИ</div>
               {frame.captionBox && <div className="lecture-caption-band" style={framePercent(frame.captionBox, frame)} aria-hidden="true"/>}
-            </div> : <div className="lecture-empty"><FilmStripIcon size={28}/>{reviewText(locale, 'none')}</div>}
+              </>}
+          </div> : <div className="lecture-empty"><FilmStripIcon size={28}/>{reviewText(locale, 'none')}</div>}
         </div>
         {slide && !playback && <details className="lecture-notes">
           <summary><NotePencilIcon size={17}/><span>{copy.notes}</span><CaretRightIcon className="lecture-notes-caret" size={15}/></summary>
@@ -227,14 +268,15 @@ export function LectureExport({ deck, locale, slideId, onClose }: {
       </Progress>}
       <div className="lecture-footer-row">
         <div className="lecture-status">
-          {checking && <Skeleton className="lecture-skeleton" aria-label={copy.reconnecting}/>}
+          {checking && <Skeleton className="lecture-skeleton" aria-hidden="true"/>}
           <div role="status" aria-live="polite" aria-atomic="true" className="lecture-status-line" data-state={shownStatus || (unavailable ? 'unavailable' : 'idle')}>
             {status ? <>{shownStatus === 'ready' ? <CheckCircleIcon/> : shownStatus === 'failed' || unavailable ? <WarningCircleIcon/> : <ClockIcon/>}
               <strong>{status}</strong>{busy && job && <span>{job.completed} / {job.total}</span>}</>
-              : !checking && <><FilmStripIcon/><span>{slides.length} / {deck.slides.length} {reviewText(locale, 'slides')}</span>
-                {estimate > 0 && <><span aria-hidden="true">·</span><span>≈ {formatSpeechTime(estimate, locale)}</span></>}</>}
+              : checking ? <span className="rv-sr">{copy.reconnecting}</span>
+                : <><FilmStripIcon/><span>{slides.length} / {deck.slides.length} {copy.slideCount}</span>
+                  {estimate > 0 && <><span aria-hidden="true">·</span><span>≈ {formatSpeechTime(estimate, locale)}</span></>}</>}
           </div>
-          {warning && <p role={requestError || connectionError ? 'alert' : undefined}><InfoIcon size={15}/>{warning}</p>}
+          {warning && <p role={requestError || connectionError || exportFailure ? 'alert' : undefined}><InfoIcon size={15}/>{warning}</p>}
           {!warning && (ready || (!checking && !unavailable && !busy)) && <p>MP4 · {videoSizes[aspect].width} × {videoSizes[aspect].height}</p>}
         </div>
         <div className="lecture-actions">

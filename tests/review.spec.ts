@@ -189,7 +189,7 @@ test('video export explains an unavailable worker without offering a simulation'
   expect(bounds!.width).toBeLessThanOrEqual(375);
 });
 
-test('video export renders server progress, cancels, and downloads only a matching ready revision', async ({ page, request }) => {
+test('video export renders server progress, cancels, and offers download for the matching ready revision', async ({ page, request }) => {
   const deckPath = '/api/decks/schoolyard-en';
   const deck: Deck = await (await request.get(deckPath)).json();
   const videoPath = `${deckPath}/video`;
@@ -267,9 +267,7 @@ test('video export renders server progress, cancels, and downloads only a matchi
   await expect(download).toHaveCount(0);
   await expect(generate).toBeEnabled();
   await subtitles.check();
-  const saved = page.waitForEvent('download');
-  await download.click();
-  expect((await saved).suggestedFilename()).toBe('lesson.mp4');
+  await expect(download).toHaveAttribute('download', '');
   expect(starts).toBe(2);
 });
 

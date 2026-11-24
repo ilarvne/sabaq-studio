@@ -96,8 +96,16 @@
 }
 .lecture-stage[data-aspect='9:16'] .lecture-frame { width: min(100%, 218px); }
 .lecture-stage[data-aspect='1:1'] .lecture-frame { width: min(100%, 389px); }
-video.lecture-frame { background: #10131d; }
-.lecture-ai, .lecture-caption-band { position: absolute; background: #10131d; }
+.lecture-player {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #10131d;
+}
+.lecture-ai, .lecture-caption-band, .lecture-mark-band { position: absolute; background: #10131d; }
+.lecture-mark-band { inset: 0 0 auto; }
 .lecture-ai {
   z-index: 1;
   display: grid;
@@ -146,6 +154,7 @@ video.lecture-frame { background: #10131d; }
   background: color-mix(in oklab, var(--card) 72%, var(--muted));
 }
 .lecture-setting-fields { min-width: 0; border: 0; padding: 0; margin: 16px 0 0; }
+.rv-dialog .lecture-setting-fields:disabled { opacity: 1; }
 .lecture-setting-fields > * + * { margin-top: 14px; }
 .lecture-format-field { display: grid; gap: 7px; }
 .lecture-format-field > label, .lecture-language > span { font-size: 12px; font-weight: 550; }
@@ -165,7 +174,7 @@ video.lecture-frame { background: #10131d; }
   min-height: 36px;
   padding: 0 4px;
   border-radius: 6px;
-  color: var(--muted-foreground);
+  color: color-mix(in oklab, var(--muted-foreground) 82%, var(--foreground));
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
