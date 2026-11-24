@@ -4,7 +4,7 @@ import JSZip from 'jszip';
 import { createStudioServer } from '../app';
 import { makeFixtureDeck } from '@sabaq/lesson/fixture';
 import { effectiveFreeLayout } from '@sabaq/lesson/free-layout';
-import type { Deck } from '@sabaq/lesson/types';
+import type { Deck, Slide } from '@sabaq/lesson/types';
 import { presentationCoverArtwork } from '@sabaq/lesson/themes';
 import { makePowerPoint } from './powerpoint';
 import { catalogRoot, defaultMediaRoot } from '../runtime-paths';
@@ -48,6 +48,48 @@ test('PowerPoint refuses an outline that does not have a complete set of slides'
   const {id}=created.json<{id:string}>();
   const response=await app.inject({url:'/api/decks/'+id+'/export/pptx'});
   assert.equal(response.statusCode,409);
+});
+
+test('PowerPoint preserves formatted title paragraphs in adaptive and free layouts', async () => {
+  const deck = makeFixtureDeck('en');
+  const titleUrl = 'https://example.org/title';
+  const slide: Slide = {
+    ...deck.slides[0], layout: 'body', title: 'Italic title\nSecond line', body: '', design: undefined, image: undefined,
+    richText: { title: { type: 'doc', content: [
+      { type: 'paragraph', attrs: { textAlign: 'right' }, content: [
+        { type: 'text', text: 'Italic title', marks: [
+          { type: 'italic' }, { type: 'link', attrs: { href: titleUrl } },
+        ] },
+      ] },
+      { type: 'paragraph', attrs: { textAlign: 'center' }, content: [{ type: 'text', text: 'Second line' }] },
+    ] } },
+  };
+  deck.slides = [
+    slide,
+    { ...slide, id: 'free-title', freeLayout: effectiveFreeLayout(slide) },
+    { ...slide, id: 'stale-rich-title', title: 'Updated plain title' },
+  ];
+  const zip = await JSZip.loadAsync(await makePowerPoint(deck, { catalog: catalogRoot, generated: defaultMediaRoot }));
+
+  for (const number of [1, 2]) {
+    const xml = await zip.file(`ppt/slides/slide${number}.xml`)!.async('string');
+    const rels = await zip.file(`ppt/slides/_rels/slide${number}.xml.rels`)!.async('string');
+    assert.match(xml, /<p:ph[^>]*type="title"/);
+    const paragraphs = [...xml.matchAll(/<a:p>[\s\S]*?<\/a:p>/g)].map(([paragraph]) => paragraph);
+    const first = paragraphs.find(paragraph => paragraph.includes('<a:t>Italic title</a:t>')) ?? '';
+    const second = paragraphs.find(paragraph => paragraph.includes('<a:t>Second line</a:t>')) ?? '';
+    assert.match(first, /<a:pPr[^>]*algn="r"/);
+    assert.match(first, /<a:rPr[^>]*\bi="1"/);
+    const relationship = /<a:hlinkClick\b[^>]*r:id="(rId\d+)"/.exec(first)?.[1];
+    assert.ok(relationship, 'The formatted title must contain an editable hyperlink run');
+    assert.ok(rels.includes(`Id="${relationship}"`));
+    assert.ok(rels.includes(`Target="${titleUrl}"`));
+    assert.match(second, /<a:pPr[^>]*algn="ctr"/);
+  }
+
+  const plain = await zip.file('ppt/slides/slide3.xml')!.async('string');
+  assert.match(plain, /<a:t>Updated plain title<\/a:t>/);
+  assert.doesNotMatch(plain, /Italic title|hlinkClick/);
 });
 
 test('the new theme covers export as native text and editable decorative shapes', async () => {

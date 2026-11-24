@@ -1,4 +1,5 @@
 import { displaySlide } from '@sabaq/lesson/typography';
+import { documentRuns } from '@sabaq/lesson/rich-text';
 import { lessonPartLabel } from '@sabaq/slide-renderer/copy';
 import { effectiveFreeLayout, freeImageIds, hasFreePhotoBackground } from '@sabaq/lesson/free-layout';
 import { applyPowerPointDecorations, arrangePowerPointShapes, canReadVisibleTitleFirst, decorativePowerPointName,
@@ -9,8 +10,9 @@ import { join } from 'node:path';
 import PptxGenJS from 'pptxgenjs';
 import JSZip from 'jszip';
 import sharp from 'sharp';
+import type { JSONContent } from '@tiptap/core';
 import { lessonPalette, powerPointVisualStyle, presentationCoverArtwork, templateFont } from '@sabaq/lesson/themes';
-import { isSlideSymbol, slideImages, type Deck, type Slide, type SlideImage } from '@sabaq/lesson/types';
+import { isSlideSymbol, slideImages, type Deck, type RichRun, type Slide, type SlideImage } from '@sabaq/lesson/types';
 import { generatedImageName } from './visuals';
 
 const wide = { w: 13.333, h: 7.5 };
@@ -22,17 +24,42 @@ const color = (hex:string) => hex.replace(/^#/, '').toUpperCase();
 
 type Box = {x:number;y:number;w:number;h:number};
 type NativeSlide = ReturnType<PptxGenJS['addSlide']>;
+type NativeText = string | PptxGenJS.TextProps[];
 export type MediaRoots = {catalog:string;generated:string};
 
-function nativeBody(slide:Slide): string|PptxGenJS.TextProps[] {
-  if (!slide.bodyRuns?.length || slide.bodyRuns.map(run=>run.text).join('')!==slide.body) return slide.body;
-  return slide.bodyRuns.map(run => ({
+function nativeRuns(runs: RichRun[]): PptxGenJS.TextProps[] {
+  return runs.map(run => ({
     text: run.text,
     options: {
       bold:run.bold, italic:run.italic,
       ...(run.href&&/^(https?:|mailto:)/i.test(run.href)&&{hyperlink:{url:run.href}}),
     },
   }));
+}
+
+function nativeBody(slide: Slide): NativeText {
+  if (!slide.bodyRuns?.length || slide.bodyRuns.map(run => run.text).join('') !== slide.body) return slide.body;
+  return nativeRuns(slide.bodyRuns);
+}
+
+function nativeTitle(original: Slide, displayed: Slide): NativeText {
+  const source = original.richText?.title as JSONContent | undefined;
+  const paragraphs = (displayed.richText?.title as JSONContent | undefined)?.content;
+  if (source?.type !== 'doc' || !paragraphs?.length ||
+      documentRuns(source).map(run => run.text).join('') !== original.title) return displayed.title;
+
+  const defaultAlign = !displayed.freeLayout && displayed.layout === 'centered' ? 'center' : 'left';
+  return paragraphs.flatMap(paragraph => {
+    const requested = paragraph.attrs?.textAlign;
+    const align = requested === 'left' || requested === 'center' || requested === 'right' || requested === 'justify'
+      ? requested : defaultAlign;
+    const runs = nativeRuns(documentRuns(paragraph));
+    if (!runs.length || runs.at(-1)?.text === '\n') runs.push({ text: '' });
+    return runs.map((run, index) => ({
+      text: run.text === '\n' ? '' : run.text,
+      options: { ...run.options, align, breakLine: run.text === '\n' || index === runs.length - 1 },
+    }));
+  });
 }
 
 export function imagePath(src:string, roots:MediaRoots) {
@@ -130,7 +157,7 @@ function storyboard(slide:Slide) {
 }
 
 function addMainText(
-  target:NativeSlide, slide:Slide, format:ReturnType<typeof storyboard>,
+  target:NativeSlide, slide:Slide, title:NativeText, format:ReturnType<typeof storyboard>,
   text:Pick<PptxGenJS.TextPropsOptions,'lang'|'color'>, titleSize:number, accent:string, fontFace:string, headingFont:string,
 ) {
   const align = slide.layout==='centered' ? 'center' : 'left';
@@ -141,7 +168,7 @@ function addMainText(
   const eyebrow = arrangedDesign && design.eyebrow;
   const eyebrowHeight = eyebrow ? Math.min(.28, titleBox.h * .25) : 0;
   if (eyebrow) titleBox = {...titleBox, y:titleBox.y+eyebrowHeight, h:titleBox.h-eyebrowHeight};
-  target.addText(slide.title,{...titleBox,...text,align,...((format.kind==='diagram' || neutral) && {fit:'shrink'}),placeholder:'lesson-title',fontFace:headingFont,fontSize:titleSize,bold:true,margin:0,valign:'middle',objectName:'Slide title'});
+  target.addText(title,{...titleBox,...text,align,...((format.kind==='diagram' || neutral) && {fit:'shrink'}),placeholder:'lesson-title',fontFace:headingFont,fontSize:titleSize,bold:true,margin:0,valign:'middle',objectName:'Slide title'});
   if (eyebrow) target.addText(eyebrow, {...format.title, ...text, align, fontFace, fontSize:12, bold:true, h:eyebrowHeight,
     margin:0, valign:'middle', fit:'shrink', objectName:'Slide eyebrow'});
   if (arrangedDesign && (design.cards?.length || design.takeaway)) {
@@ -363,7 +390,7 @@ export async function makePowerPoint(deck:Deck, roots:MediaRoots) {
     }
     return masterName;
   }
-  async function addFreeSlide(slide:Slide,index:number,style:DrawingStyle) {
+  async function addFreeSlide(slide:Slide,title:NativeText,index:number,style:DrawingStyle) {
     const {text,paper,fontFace,headingFont,tint,accent}=style;
     const layout=effectiveFreeLayout(slide);
     const photoBackground=hasFreePhotoBackground(slide,layout);
@@ -394,7 +421,7 @@ export async function makePowerPoint(deck:Deck, roots:MediaRoots) {
       const options={...box,...text,...(photoBackground && {color:'FFFFFF'}),fontFace,margin:0,fit:'shrink' as const,valign:'top' as const,objectName:prefix+item.id};
       if(item.id==='body') target.addText(nativeBody(slide),{...options,fontSize:24});
       else if(item.id==='title' && slide.title.trim())
-        target.addText(slide.title,{...options,...(visibleTitle && {placeholder:'lesson-title'}),fontFace:headingFont,fontSize:32,bold:true});
+        target.addText(title,{...options,...(visibleTitle && {placeholder:'lesson-title'}),fontFace:headingFont,fontSize:32,bold:true});
       else if(item.id==='eyebrow') target.addText(slide.design?.eyebrow || lessonPartLabel(slide.lessonPart,deck.language),{...options,color:photoBackground?'DAECC3':accent,fontSize:18});
       else if(item.id==='takeaway') target.addText(slide.design?.takeaway ?? '',{...options,fontSize:24});
       // The presentation initially hides answers. Keep them in the speaker notes in downloaded files.
@@ -425,9 +452,10 @@ export async function makePowerPoint(deck:Deck, roots:MediaRoots) {
   }
   for (const [index, originalSlide] of deck.slides.entries()) {
     const slide=displaySlide(originalSlide, deck.language);
+    const title=nativeTitle(originalSlide,slide);
     const style=slide.powerPointLayoutId ? drawingStyle(deck,slide.powerPointLayoutId) : base;
     const {text,paper,fontFace,headingFont,accent}=style;
-    if(slide.freeLayout) {await addFreeSlide(slide,index,style);continue;}
+    if(slide.freeLayout) {await addFreeSlide(slide,title,index,style);continue;}
     if (slide.importedPage && slide.layout === 'image-full' && slide.image) {
       const path = imagePath(slide.image.src, roots);
       if (!path) throw new Error('Unsupported imported slide image');
@@ -466,7 +494,7 @@ export async function makePowerPoint(deck:Deck, roots:MediaRoots) {
         ...format.media, line: { transparency: 100 }, fill: { color: '101C22', transparency: 28 },
         objectName: decorativePowerPointName('Image contrast overlay'),
       });
-      addMainText(target, slide, format, { ...text, color: 'FFFFFF' }, titleSize, accent, fontFace, headingFont);
+      addMainText(target, slide, title, format, { ...text, color: 'FFFFFF' }, titleSize, accent, fontFace, headingFont);
       if (slide.chart || slide.table) {
         const media={x:6.78,y:.72,w:5.9,h:6.05};
         target.addShape(pptx.ShapeType.rect,{...media,line:{transparency:100},fill:{color:paper},
@@ -474,7 +502,7 @@ export async function makePowerPoint(deck:Deck, roots:MediaRoots) {
         await addAdaptiveMedia(target,slide,{x:media.x+.12,y:media.y+.15,w:media.w-.24,h:media.h-.30},style,true);
       }
     } else {
-      addMainText(target,slide,format,text,titleSize,accent,fontFace,headingFont);
+      addMainText(target,slide,title,format,text,titleSize,accent,fontFace,headingFont);
       if ('media' in format && format.media) await addAdaptiveMedia(target,slide,format.media,style);
     }
 
