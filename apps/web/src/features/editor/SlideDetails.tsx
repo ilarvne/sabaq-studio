@@ -368,10 +368,13 @@ export function SlideDetails({
       editor={tip}
       c={c}
       onEnd={editing?.inSheet ? undefined : endEditing}
-      assistant={!editing?.inSheet && <CanvasAssistantDropdown field={slot} openReview={openAssistant} trigger={
-        <ToolbarButton render={<Button type="button" variant="ghost" size="icon-sm" className="ed-icon"
-          aria-label={canvasCopy[uiLocale].selected} title={canvasCopy[uiLocale].selected}><ChatCircleTextIcon /></Button>} />
-      } />}
+      assistant={editing?.inSheet ? undefined : selection => {
+        const label = selection ? canvasCopy[uiLocale].selected : canvasCopy[uiLocale].label;
+        return <CanvasAssistantDropdown field={slot} selection={selection} openReview={openAssistant} trigger={
+          <ToolbarButton render={<Button type="button" variant="ghost" size="icon-sm" className="ed-icon"
+            aria-label={label} title={label}><ChatCircleTextIcon /></Button>} />
+        } />;
+      }}
       diagram={slot==='body' && onEditOp && deck.phase==='editing' && deck.slides.length<40 ? {
         label:diagramWords[uiLocale].make,
         selected:text=>{

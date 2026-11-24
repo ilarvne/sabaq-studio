@@ -526,7 +526,7 @@ test('element translation and custom canvas requests target the selected field a
   await page.goto('/#/deck/schoolyard-en');
   const title = page.locator('.ed-stage [data-slot-entry="title"]');
   await title.click();
-  await page.getByRole('button', {name:'Edit selected text with AI', exact:true}).click();
+  await page.getByRole('toolbar', {name:'Edit content'}).getByRole('button', {name:'Edit with AI', exact:true}).click();
   const menu = page.getByRole('menu', {name: 'Edit with AI'});
   await menu.getByRole('menuitem', {name: 'Custom request'}).click();
   const composer = page.getByRole('textbox', {name: 'Ask about this slide…'});
@@ -582,6 +582,42 @@ test('canvas context actions send the exact highlighted words', async ({page, re
   await menu.getByRole('menuitem',{name:'Simplify',exact:true}).click();
   expect((await posted).postDataJSON()).toMatchObject({
     slideId:slide.id,canvasScope:{field:'body',selection:{start:7,end:23,text:selected}},
+  });
+});
+
+test('inline AI uses the selected occurrence across formatted text runs', async ({page, request}) => {
+  await page.route('**/api/capabilities', async route => {
+    const response = await route.fetch();
+    await route.fulfill({response, json:{...await response.json(), localAssistant:true}});
+  });
+  const created = await request.post('/api/decks', { data:{ topic:'Field notes', language:'en', provider:'fixture', template:'blank', review:false } });
+  await expect(created).toBeOK();
+  const deck:Deck = await created.json();
+  const slide = deck.slides[0];
+  const url = '/api/decks/' + deck.id;
+  await expect(await request.patch(url, { data:{ op:{ kind:'slide', slideId:slide.id, baseVersion:slide.version, changes:{
+    body:'Repeat the measurements.\nCheck the measurements now.',
+    richText:{ body:{ type:'doc', content:[
+      { type:'paragraph', content:[{ type:'text', text:'Repeat the measurements.' }] },
+      { type:'paragraph', content:[{ type:'text', text:'Check ' }, { type:'text', text:'the', marks:[{type:'bold'}] }, { type:'text', text:' measurements now.' }] },
+    ] } },
+  } } } })).toBeOK();
+  await page.goto('/#/deck/' + deck.id);
+  const stage = page.locator('.ed-stage');
+  await stage.locator('[data-slot-entry="body"]').click();
+  const editable = stage.locator('[contenteditable=true]');
+  await editable.locator('strong').evaluate(strong => {
+    const range = document.createRange();
+    range.setStart(strong.firstChild!, 0);
+    range.setEnd(strong.nextSibling!, ' measurements'.length);
+    document.getSelection()!.removeAllRanges();
+    document.getSelection()!.addRange(range);
+  });
+  const posted = page.waitForRequest(req => req.method() === 'POST' && new URL(req.url()).pathname === url + '/assistant');
+  await page.getByRole('toolbar', {name:'Edit content'}).getByRole('button', {name:'Edit selected text with AI', exact:true}).click();
+  await page.getByRole('menuitem', {name:'Simplify', exact:true}).click();
+  expect((await posted).postDataJSON()).toMatchObject({
+    slideId:slide.id, canvasScope:{field:'body', selection:{start:31, end:47, text:'the measurements'}},
   });
 });
 

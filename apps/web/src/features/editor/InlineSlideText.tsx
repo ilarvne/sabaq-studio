@@ -3,12 +3,13 @@ import { EditorContent, useEditor } from '@tiptap/react';
 import type { Editor as TipEditor, JSONContent } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import TextAlign from '@tiptap/extension-text-align';
+import type { AssistantCanvasScope } from '@sabaq/contracts/assistant';
 import {
   CheckIcon, LinkIcon, ListBulletsIcon, TextAlignCenterIcon, TextAlignLeftIcon,
   TextAlignRightIcon, TextBIcon, TextItalicIcon, TreeStructureIcon,
 } from '@phosphor-icons/react';
 import type { Slide } from '@sabaq/lesson/types';
-import { slotDocument, type TextSlot } from '@sabaq/slide-renderer/canvas';
+import { documentRuns, slotDocument, type TextSlot } from '@sabaq/slide-renderer/canvas';
 import { Button } from '@/components/shadcn/button';
 import { Sheet, SheetClose, SheetHeader, SheetPopup, SheetTitle } from '@/components/coss/sheet';
 import { Toolbar } from '@/components/coss/toolbar';
@@ -89,6 +90,17 @@ export function ActiveSlot({
   );
 }
 
+function selectedTextRange(editor: TipEditor): AssistantCanvasScope['selection'] {
+  const { doc, selection } = editor.state;
+  if (selection.empty) return;
+  // The saved slide counts separators between paragraphs and list items as newlines.
+  const prefix = (position: number) => documentRuns(doc.cut(0, position).toJSON()).map(run => run.text).join('');
+  const start = prefix(selection.from).length;
+  const through = prefix(selection.to);
+  const text = through.slice(start);
+  if (text.trim()) return { start, end: through.length, text };
+}
+
 export function ToolRow({
   editor,
   c,
@@ -98,7 +110,7 @@ export function ToolRow({
   assistant,
 }: {
   diagram?: {label:string; selected:(text:string)=>void};
-  assistant?: ReactNode;
+  assistant?: (selection: AssistantCanvasScope['selection']) => ReactNode;
   editor: TipEditor;
   c: EditorCopy;
   onEnd?: () => void;
@@ -186,7 +198,7 @@ export function ToolRow({
           const {from,to}=editor.state.selection;
           diagram.selected(editor.state.doc.textBetween(from,to,'\n','\n'));
         }}><TreeStructureIcon/></IconButton>}
-      {assistant}
+      {assistant?.(selectedTextRange(editor))}
       {onEnd && <IconButton toolbar label={c.done} onClick={onEnd}><CheckIcon /></IconButton>}
     </Toolbar>
   );
