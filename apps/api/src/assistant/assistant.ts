@@ -4,16 +4,17 @@ import { narrationPrompts, narrationSource, spokenNotesDraft } from '@sabaq/less
 import { lessonImageGuidance } from '@sabaq/lesson/image-style';
 import { ModerationError, requireSuitable } from '../authoring/moderation';
 import { z } from 'zod';
-import type { AssistantActivity, AssistantAttachment, AssistantDecision, AssistantMessage, AssistantProposal, AssistantSnapshot } from '@sabaq/contracts/assistant';
+import type { AssistantActivity, AssistantAttachment, AssistantDecision, AssistantMessage, AssistantProposal, AssistantSnapshot, AssistantWebSource } from '@sabaq/contracts/assistant';
 import type { LessonCitation } from '@sabaq/contracts/retrieval';
-import type { Deck, Locale } from '@sabaq/lesson/types';
+import { deckThemes, type Deck, type Locale } from '@sabaq/lesson/types';
 import type { SourceFileDetail } from '@sabaq/contracts/source-files';
 import { themePresets } from '@sabaq/lesson/themes';
 import { hasAlem } from '../authoring/alem';
+import { researchDocument } from '../authoring/research';
 import { runLessonAgent, type AgentAnswer } from '@sabaq/agent/decisions';
-import { AssistantToolError, prepareAssistantTool } from '@sabaq/agent/tools';
+import { AssistantToolError, findCanvasObject, prepareAssistantTool } from '@sabaq/agent/tools';
 import { askAlem, askOllama, rewriteLectureNotes, rewriteSlideBody } from './assistant-agent';
-import { assistantCopy, chartFromSlideTable, isSimpleShortening, localAssistant, mentionedSlideNumber, namedThemeRequest, shorteningProposal, shortenSlide } from '@sabaq/agent/local-commands';
+import { assistantCopy, chartFromSlideTable, imageRemovalRequest, isSimpleShortening, localAssistant, mentionedSlideNumber, moveSlideImageBesideText, namedThemeRequest, removeSlideImage, shorteningProposal, shortenSlide } from '@sabaq/agent/local-commands';
 import { AssistantMemory } from './assistant-memory';
 import { findLocalModel, loopbackService } from './local-model';
 import { lessonPassages, readLessonOutline, readLessonSlide } from './lesson-passages';
@@ -26,11 +27,19 @@ import type { Studio } from '../lessons/studio';
 import type { Principal } from '../access/access';
 import { hasImageProvider, illustrationCatalog, resolveSlideIllustration } from '../media/visuals';
 import { SourceLibrary } from '../media/source-library';
+import { scopeCanvasEdits, type ScopedAction } from './canvas-edits';
+import { assistantWebResearchAvailable, searchAssistantWeb, webResearchFallback, WebResearchError, writeWebAnswer } from './web-research';
 
 const identifier = z.string().min(1).max(160);
 export const assistantInput = z.object({
   clientId:identifier, text:z.string().trim().min(1).max(6000),
   slideId:identifier.optional(), locale:z.enum(['en','ru','kk']),
+  canvasScope:z.discriminatedUnion('field', [
+    z.strictObject({field:z.enum(['slide','title','body']),selection:z.strictObject({
+      start:z.number().int().nonnegative().max(10000),end:z.number().int().min(1).max(10000),text:z.string().min(1).max(10000),
+    }).optional()}),
+    z.strictObject({field:z.literal('object'),objectId:identifier,version:z.number().int().nonnegative(),theme:z.enum(deckThemes)}),
+  ]).optional(),
   attachments:z.array(z.object({
     name:z.string().trim().min(1).max(160).regex(/^[^\u0000-\u001f\u007f]+$/u),
     text:z.string().trim().min(1).max(12000),
@@ -39,6 +48,7 @@ export const assistantInput = z.object({
   sourceFileIds:z.array(z.uuid()).min(1).max(2).optional(),
   searchSourceLibrary:z.literal(true).optional(),
   useCloudSourceRag:z.literal(true).optional(),
+  webResearch:z.enum(['search','research']).optional(),
 });
 export const assistantCancelInput = assistantInput.pick({clientId:true});
 type Input = z.infer<typeof assistantInput>;
@@ -184,11 +194,24 @@ export class DeckAssistant {
       return { events:[this.get(deckId,principal)], disconnect:()=>undefined };
     }
     if (this.running.has(deckId)) throw new ApiError(409,'A response is already running.');
-    const {attachments,attachmentTurnId,sourceFileIds,searchSourceLibrary} = input;
+    const {attachments,attachmentTurnId,sourceFileIds,searchSourceLibrary,canvasScope,webResearch} = input;
+    if (webResearch && (attachments || attachmentTurnId || sourceFileIds || searchSourceLibrary || canvasScope || input.useCloudSourceRag))
+      throw new ApiError(400,'Send a public web query separately from files or selected canvas content.');
+    if (webResearch && !assistantWebResearchAvailable())
+      throw new ApiError(503,'Web research is unavailable.');
     if ([attachments,attachmentTurnId,sourceFileIds,searchSourceLibrary].filter(Boolean).length>1)
       throw new ApiError(400,'Choose one source option for this message.');
     const current = input.slideId && deck.slides.find(({id})=>id===input.slideId);
     if (input.slideId && !current) throw new ApiError(404,'Slide not found.');
+    if (canvasScope && (!current || current.status!=='ready')) throw new ApiError(409,'Select a ready slide.');
+    if (canvasScope?.field==='object') {
+      if (!current || current.version!==canvasScope.version || canvasScope.theme!==deck.theme || !findCanvasObject(deck,current,canvasScope.objectId))
+        throw new ApiError(409,'The selected object changed. Select it again.');
+    } else if (canvasScope?.selection) {
+      const {field,selection:{start,end,text}}=canvasScope;
+      if (!current || field==='slide' || end<=start || current[field].slice(start,end)!==text)
+        throw new ApiError(409,'The selected text changed. Select it again.');
+    }
     let ids = sourceFileIds;
     let all = searchSourceLibrary;
     let legacy: AssistantAttachment[] | undefined;
@@ -212,7 +235,7 @@ export class DeckAssistant {
     const selection = ids ?? savedLegacy;
     const selected = selection && this.sources.detailsFor(selection,principal);
     const number = mentionedSlideNumber(input.text);
-    const slideId = number === undefined ? (current ? current.id : undefined) : deck.slides[number-1]?.id;
+    const slideId = canvasScope || number === undefined ? (current ? current.id : undefined) : deck.slides[number-1]?.id;
     const controller = new AbortController();
     const fileNames = (attachments ?? selected ?? legacy)?.map(file => file.name);
     const hadPreferences = this.memory.list(deckId).memory.length > 0;
@@ -220,7 +243,8 @@ export class DeckAssistant {
     const {attachments:_discard,...storedInput} = input;
     const turn: Turn = {
       input:storedInput,
-      user:{id:'user-'+input.clientId,role:'user',text:input.text,slideId,...(fileNames && {fileNames}),...(all && {searchedSourceLibrary:true})},
+      user:{id:'user-'+input.clientId,role:'user',text:input.text,slideId,...(canvasScope && {canvasScope}),...(webResearch && {webResearch}),
+        ...(fileNames && {fileNames}),...(all && {searchedSourceLibrary:true})},
       assistant:{id:'assistant-'+input.clientId,role:'assistant',text:assistantCopy[input.locale].loading,slideId,status:'running'},
       // Interrupted and unmoderated turns are private until their routing decision is complete.
       localOnly:true,
@@ -252,12 +276,16 @@ export class DeckAssistant {
   }
 
   private async *run(deck: Deck, turn: Turn, history: Turn[], signal: AbortSignal, hadPreferences:boolean, sources?: Sources, principal?: Principal) {
-    const {text,locale,clientId} = turn.input;
+    const {text,locale,clientId,canvasScope,webResearch} = turn.input;
     const ui = assistantCopy[locale];
     const slideId = turn.user.slideId;
     const focus = deck.slides.find(({id})=>id===slideId);
+    const selectedObject = focus && canvasScope?.field==='object' ? findCanvasObject(deck,focus,canvasScope.objectId) : undefined;
     const activeSlideId = turn.input.slideId;
-    const useAlem = deck.provider==='alem' && !deck.source && hasAlem();
+    const research = deck.research?.sources;
+    const publicSource = research?.length ? researchDocument(deck.language,research) : undefined;
+    const privateSource = deck.source && (deck.source.name!==publicSource?.name || deck.source.text!==publicSource?.text);
+    const useAlem = deck.provider==='alem' && !privateSource && hasAlem();
     const allowGeneratedImages = useAlem && hasImageProvider();
     const snapshot = () => this.get(deck.id,principal);
     const begin = (kind:AssistantActivity['kind'], target?:string) => {
@@ -277,14 +305,20 @@ export class DeckAssistant {
       yield snapshot();
       signal.throwIfAborted();
       await requireSuitable(text,locale,'instruction',signal);
-      const theme = sources ? undefined : namedThemeRequest(text);
+      const theme = sources || canvasScope ? undefined : namedThemeRequest(text);
+      const slideScope = !canvasScope || canvasScope.field==='slide';
+      const imageRemoval = slideScope && !sources && imageRemovalRequest(text);
       const localModel = process.env.STUDIO_ASSISTANT_OLLAMA_MODEL?.trim();
       const localOrigin = loopbackService(process.env.STUDIO_OLLAMA_URL || 'http://127.0.0.1:11434');
-      const speech = !sources && Object.values(narrationPrompts).includes(text.trim());
-      const short = !sources && isSimpleShortening(text);
-      const chart = short || sources ? undefined : chartFromSlideTable(focus,text,locale,deck.language);
+      const speech = !sources && !canvasScope && Object.values(narrationPrompts).includes(text.trim());
+      const short = !sources && (slideScope || canvasScope.field==='body' && !canvasScope.selection) && isSimpleShortening(text);
+      const chart = short || sources || (canvasScope && canvasScope.field!=='slide') ? undefined : chartFromSlideTable(focus,text,locale,deck.language);
+      const scopedNumber = canvasScope ? mentionedSlideNumber(text) : undefined;
+      const sideTarget = scopedNumber === undefined || deck.slides[scopedNumber-1]?.id === slideId ? focus : undefined;
+      const sideEdit = !webResearch && !sources && (!canvasScope || canvasScope.field === 'slide')
+        ? moveSlideImageBesideText(sideTarget,text,locale,deck.language) : undefined;
       const hasPreferences = hadPreferences || this.memory.list(deck.id).memory.length>0;
-      const privateContext = Boolean(speech || sources || deck.source || hasPreferences || !useAlem);
+      const privateContext = Boolean(webResearch || speech || sources || privateSource || hasPreferences || !useAlem);
       const cloudSources = Boolean(sources && turn.input.useCloudSourceRag);
       const wantsLocal = privateContext && !cloudSources;
       turn.localOnly = privateContext;
@@ -294,9 +328,33 @@ export class DeckAssistant {
         const tag = await findLocalModel(localOrigin,model,signal);
         if (tag) return {origin:localOrigin,model:tag.name};
       };
-      const localCommand = wantsLocal && !sources && !short && !chart ? localAssistant(deck,focus,text,locale) : undefined;
+      const localCommand = wantsLocal && !sources && !canvasScope && !short && !chart ? localAssistant(deck,focus,text,locale) : undefined;
       let result: AgentAnswer;
-      if (theme) {
+      let webSources: AssistantWebSource[] | undefined;
+      if (webResearch) {
+        const activity = begin(webResearch === 'research' ? 'web_research' : 'web_search');
+        yield snapshot();
+        const found = await searchAssistantWeb(text,webResearch,locale,signal);
+        webSources = found.sources;
+        finish(activity,'complete',{count:webSources.length});
+        let reply = found.notice;
+        if (webSources.some(source=>source.excerpt)) {
+          reply = webResearchFallback[locale];
+          if (hasAlem()) {
+            const drafting = begin('write_web_answer');
+            yield snapshot();
+            let answer: string | undefined;
+            try {
+              answer = await writeWebAnswer(text,webResearch,locale,webSources,signal);
+            } catch { signal.throwIfAborted(); }
+            if (answer) reply = answer;
+            finish(drafting,answer ? 'complete' : 'error');
+          }
+        }
+        await requireSuitable({text:reply,sources:webSources},locale,'output',signal);
+        result = {reply,actions:[]};
+        yield snapshot();
+      } else if (theme) {
         result = {reply:ui.prepared,actions:[{tool:'edit_deck',theme}]};
       } else if (speech) {
         const inspection=begin('read_slide',slideId);
@@ -343,6 +401,16 @@ export class DeckAssistant {
             finish(shortening,'error');
           }
         } else result = shortenSlide(focus,locale,deck.language);
+      } else if (imageRemoval) {
+        const explicitTarget = imageRemoval.slideNumber!==undefined && deck.slides[imageRemoval.slideNumber-1]?.id;
+        const insideScope = !canvasScope || canvasScope.field==='slide' &&
+          (imageRemoval.slideNumber===undefined || explicitTarget===slideId);
+        const target = insideScope ? focus : undefined;
+        finish(begin('inspect_slide',target?.id),'complete',{count:target ? 1 : 0});
+        result = removeSlideImage(target,imageRemoval.index,locale);
+      } else if (sideEdit) {
+        finish(begin('inspect_slide',sideTarget?.id),'complete',{count:sideTarget ? 1 : 0});
+        result = sideEdit;
       } else if (chart) {
         finish(begin('inspect_slide',slideId),'complete',{count:1});
         result = chart;
@@ -374,13 +442,14 @@ export class DeckAssistant {
           canGenerateIllustrations:false,
         } : {
           message:text, locale, lesson:describeLesson(deck,activeSlideId,slideId),
+          ...(canvasScope && {canvasScope:{...canvasScope,slideId,...(selectedObject && {object:selectedObject})}}),
           context:context.map(({user,assistant})=>({question:user.text.slice(0,600),slideId:user.slideId,
             reply:assistant.status==='complete' ? assistant.text.slice(0,600) : '',proposalState:assistant.proposal?.status})),
           themes:Object.entries(themePresets).map(([id,preset])=>({id,name:preset.name[locale],use:preset.use})),
           illustrations:illustrationCatalog, canGenerateIllustrations:allowGeneratedImages && !wantsLocal,
           ...(local && {preferences}),
         };
-        const refersToSlide = mentionedSlideNumber(text)!==undefined || /(?:this|current|selected) slide|(?:этом|этот|текущем|выбранном) слайд|(?:осы|бұл|ағымдағы) слайд/iu.test(text);
+        const refersToSlide = Boolean(canvasScope) || mentionedSlideNumber(text)!==undefined || /(?:this|current|selected) slide|(?:этом|этот|текущем|выбранном) слайд|(?:осы|бұл|ағымдағы) слайд/iu.test(text);
         const attachmentPassages = sources?.legacy?.map((source,index) => lessonPassages({
           ...deck, id:`${deck.id}:${clientId}:attachment:${index}`, source, research:undefined, slides:[],
         }).map(hit => ({...hit, field:'attachment.text'})));
@@ -426,24 +495,27 @@ export class DeckAssistant {
       }
       signal.throwIfAborted();
 
-      const firstAction = result.actions[0];
-      const target = result.actions.length===1 && 'slideId' in firstAction
+      const scoped:ScopedAction[] = canvasScope && focus ? scopeCanvasEdits(result.actions,focus,canvasScope) :
+        result.actions.map(action=>({action}));
+      const firstAction = scoped[0]?.action;
+      const target = firstAction && scoped.length===1 && 'slideId' in firstAction
         ? deck.slides.find(slide=>slide.id===firstAction.slideId)?.id : undefined;
       const validation = firstAction ? begin('validate_edit',target) : undefined;
       if (validation) yield snapshot();
-      await requireSuitable({reply:result.reply,actions:result.actions,citations:result.citations?.map(hit=>hit.excerpt)},locale,'output',signal);
+      if (!webResearch)
+        await requireSuitable({reply:result.reply,actions:scoped.map(({action})=>action),citations:result.citations?.map(hit=>hit.excerpt)},locale,'output',signal);
       if (validation) finish(validation);
       const operations: AssistantOperation[] = [];
       const actions = [];
       let draft = deck;
-      if (result.actions.length) {
+      if (scoped.length) {
         turn.assistant.text = ui.checking;
         const preparation = begin('prepare_edit',target);
         yield snapshot();
         const supplied = [...context.filter(previous=>previous.user.slideId===slideId).map(({user})=>user.text),text,
           ...(result.citations ?? []).filter(hit=>hit.kind==='source').map(hit=>hit.excerpt)].join('\n');
         // Build one proposal on a copy. No validated tool can write a deck from here.
-        for (const action of result.actions) {
+        for (const {action,formatting} of scoped) {
           signal.throwIfAborted();
           const tool = prepareAssistantTool(action,{
             deck:draft, locale, supplied, signal, allowGeneratedImages:allowGeneratedImages && !privateContext,
@@ -462,6 +534,8 @@ export class DeckAssistant {
             }
             const prepared = stage.value;
             if (!prepared) continue;
+            if (formatting && prepared.operation.kind==='slide')
+              Object.assign(prepared.operation.changes,formatting);
             operations.push(prepared.operation);
             actions.push(prepared.preview);
             draft = this.studio.previewAssistantBatch(draft,[prepared.operation]);
@@ -470,8 +544,9 @@ export class DeckAssistant {
         finish(preparation,'complete',{count:operations.length});
       }
       signal.throwIfAborted();
-      const replyText = result.actions.length && !actions.length ? ui.empty : result.reply;
-      if (!actions.length || replyText !== ui.prepared) {
+      const editHadNoEffect = result.actions.length && !actions.length;
+      const replyText = editHadNoEffect && (!sideEdit || result.reply === ui.prepared) ? ui.empty : result.reply;
+      if (!webResearch && (!actions.length || replyText !== ui.prepared)) {
         // Providers return structured answers. Release only the reply that passed output and tool validation.
         const current = snapshot();
         const previous = current.messages.filter(message => message.id !== turn.assistant.id);
@@ -491,6 +566,7 @@ export class DeckAssistant {
         text:replyText,
         status:'complete',
         ...(result.citations?.length && {citations:result.citations}),
+        ...(webSources?.length && {webSources}),
         ...(actions.length && {proposal:{id:clientId,status:'pending',baseRevision:deck.revision,actions,changes:slideChanges(deck,draft,slideId),
           ...(rearranged && {order:{before:deck.slides.map(slide=>slide.title),after:draft.slides.map(slide=>slide.title)}}),
           ...(deck.theme!==draft.theme && {themes:{before:deck.theme,after:draft.theme}})}}),
@@ -504,7 +580,7 @@ export class DeckAssistant {
       if (signal.aborted) this.stopTurn(deck.id,turn);
       else {
         this.settleActivity(turn,'error');
-        turn.assistant = {...turn.assistant, text:error instanceof ModerationError || (error instanceof ApiError || error instanceof AssistantToolError) && error.status===422 ? error.message : ui.error,status:'error'};
+        turn.assistant = {...turn.assistant, text:error instanceof ModerationError || error instanceof WebResearchError || (error instanceof ApiError || error instanceof AssistantToolError) && error.status===422 ? error.message : ui.error,status:'error'};
         this.save(deck.id,turn);
       }
     } finally {

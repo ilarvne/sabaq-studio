@@ -206,6 +206,7 @@ function lessonGraph(input: Input) {
     if (sourceText !== undefined && step.actions.length) {
       const material = [query,sourceText,...citations.map(hit=>hit.excerpt)];
       const unsupported = step.actions.some(action => {
+        if (action.tool === 'edit_object') return action.changes.text!==undefined && !supportedClaims(action.changes.text,material);
         if (action.tool !== 'edit_slide' && action.tool !== 'add_slide') return false;
         const c = action.changes;
         const fields = [c.title,c.body,c.notes,c.answer,c.chart?.alt,c.design?.eyebrow,c.design?.takeaway,

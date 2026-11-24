@@ -1,11 +1,16 @@
-import type { Deck, Slide, Theme } from '@sabaq/lesson/types';
+import type { Deck, Slide, Theme, WebResearchMode } from '@sabaq/lesson/types';
 import type { LessonCitation } from './retrieval';
 
 export type AssistantMemoryEntry = { id: string; text: string; createdAt: string };
 export type AssistantAttachment = { name: string; text: string };
+export type AssistantWebResearch = WebResearchMode;
+export type AssistantWebSource = { id: string; title: string; url: string; excerpt?: string };
 
 export type AssistantDecision = 'apply' | 'dismiss' | 'restore';
 export type AssistantTextSelection = { field:'title'|'body'; start:number; end:number; text:string };
+export type AssistantCanvasScope =
+  | { field:'title'|'body'|'slide'; selection?: Omit<AssistantTextSelection,'field'> }
+  | { field:'object'; objectId:string; version:number; theme:Theme; selection?:never };
 export type AssistantProposal = {
   id: string;
   status: 'pending' | 'applied' | 'dismissed' | 'stale' | 'restored';
@@ -26,7 +31,7 @@ export type AssistantRead = {
 export type AssistantActivity = {
   id: string;
   kind: 'inspect_slide' | AssistantRead['tool'] | 'recall_preferences' | 'draft_response' | 'assess_support'
-    | 'shorten_text' | 'prepare_edit' | 'validate_edit' | 'generate_illustration';
+    | 'shorten_text' | 'prepare_edit' | 'validate_edit' | 'generate_illustration' | 'web_search' | 'web_research' | 'write_web_answer';
   status: 'running' | 'complete' | 'error' | 'cancelled';
   slideId?: string;
   count?: number;
@@ -40,6 +45,9 @@ export type AssistantMessage = {
   slideId?: string;
   fileNames?: string[];
   searchedSourceLibrary?: boolean;
+  webResearch?: AssistantWebResearch;
+  webSources?: AssistantWebSource[];
+  canvasScope?: AssistantCanvasScope;
   selection?: AssistantTextSelection;
   status?: 'running' | 'complete' | 'cancelled' | 'error';
   /** Cumulative, output-checked reply while the turn is running. */

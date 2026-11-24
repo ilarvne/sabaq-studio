@@ -4,9 +4,11 @@ import type { Locale } from '@sabaq/lesson/types';
 import { z } from 'zod';
 import { AlemOutputError, generate } from '../authoring/alem';
 
+const scopedInstruction = assistantInstruction + '\nWhen canvasScope is present, edit only slideId and the specified field. A field of slide allows changes anywhere on that slide. If canvasScope.selection is present, the changed field must contain only the replacement for selection.text; the studio inserts it at the selected range. Use the selection as source data. For field object use edit_object, taking the exact objectId from canvasScope. Geometry is percent of the slide, rotation is degrees, color is #RRGGBB. Only text objects have text and text styling. Use only the fields the teacher wants changed.';
+
 export const askAlem: AgentModel = async (input,signal) => {
   try {
-    return await generate(assistantInstruction,input,assistantStepSchema,signal);
+    return await generate('canvasScope' in input ? scopedInstruction : assistantInstruction,input,assistantStepSchema,signal);
   } catch (error) {
     if (!(error instanceof AlemOutputError)) throw error;
     throw new AgentModelOutputError(error.message,{cause:error});
@@ -37,7 +39,8 @@ async function askLocal<T>(connection:LocalAssistantModel, direction:string, inp
 export function askOllama(connection:LocalAssistantModel): AgentModel {
   return async (input,signal) => {
     const {message,preferences,...lessonContext} = input as Record<string,unknown>;
-    return askLocal(connection,assistantInstruction,{message,preferences,...lessonContext},assistantStepSchema,signal);
+    return askLocal(connection,'canvasScope' in lessonContext ? scopedInstruction : assistantInstruction,
+      {message,preferences,...lessonContext},assistantStepSchema,signal);
   };
 }
 

@@ -160,6 +160,90 @@ test('a deictic shortening stays on the selected slide and previews the edit', a
   assert.deepEqual(result.deck?.slides.slice(0,2),before.slides.slice(0,2));
 });
 
+test('Убери картинку prepares a selected-slide removal without calling a model', async t=>{
+  agentSettings(t,{ALEM_API_KEY:'assistant-test',STUDIO_MODERATION_OLLAMA_MODEL:'',STUDIO_AUTH_MODE:''});
+  const app=createStudioServer({dbPath:':memory:'});
+  t.after(()=>app.close());
+  const creation=await app.inject({method:'POST',url:'/api/decks',
+    payload:{topic:'Солнечная система',language:'ru',provider:'alem',review:true,template:'blank'}});
+  assert.equal(creation.statusCode,201,creation.body);
+  const deck=creation.json<Deck>();
+  const slide=deck.slides[0];
+  const root='/api/decks/'+deck.id;
+  const path=root+'/assistant';
+  const image={src:'/assets/water-lab.webp',alt:'Иллюстрация'};
+  const setup=await app.inject({method:'PATCH',url:root,payload:{op:{
+    kind:'slide',slideId:slide.id,baseVersion:slide.version,
+    changes:{layout:'image-full',image,title:'Дорабатываем ответ',body:'Сохраните текст.',notes:'Сохраните заметки.'},
+  }}});
+  assert.equal(setup.statusCode,200,setup.body);
+  const before=setup.json<Deck>();
+  const fetch=t.mock.method(globalThis,'fetch',async ()=>{throw new Error('Unexpected model call');});
+  const send=async (clientId:string)=>{
+    const response=await app.inject({method:'POST',url:path,payload:{
+      clientId,locale:'ru',slideId:slide.id,text:'Убери картинку',canvasScope:{field:'slide'},
+    }});
+    assert.equal(response.statusCode,200);
+    return snapshots(response.body).at(-1)?.messages.at(-1);
+  };
+  const pending=await send('remove-illustration');
+  assert.equal(pending?.proposal?.status,'pending');
+  assert.equal(pending?.proposal?.actions[0].label,'Удалить иллюстрацию');
+  assert.deepEqual(pending?.proposal?.changes?.map(change=>change.slideId),[slide.id]);
+  assert.deepEqual(pending?.proposal?.changes?.[0].before?.image,image);
+  const {image:_removed,...original}=before.slides[0];
+  assert.deepEqual(pending?.proposal?.changes?.[0].after,{...original,layout:'body',version:original.version+1});
+  assert.deepEqual((await app.inject({url:root})).json<Deck>(),before);
+
+  const approve=await app.inject({method:'POST',url:path+'/proposals/remove-illustration',payload:{action:'apply'}});
+  assert.equal(approve.statusCode,200);
+  assert.deepEqual(approve.json<AssistantSnapshot>().deck?.slides[0],pending?.proposal?.changes?.[0].after);
+  const empty=await send('already-removed');
+  assert.equal(empty?.proposal,undefined);
+  assert.match(empty?.text ?? '',/нет отдельного изображения/iu);
+  assert.equal(fetch.mock.callCount(),0);
+});
+
+test('image removal asks which gallery image to remove and preserves other image frames', async t=>{
+  agentSettings(t,{STUDIO_MODERATION_OLLAMA_MODEL:'',STUDIO_AUTH_MODE:''});
+  const app=createStudioServer({dbPath:':memory:'});
+  t.after(()=>app.close());
+  const root='/api/decks/schoolyard-ru';
+  const deck=(await app.inject({url:root})).json<Deck>();
+  const slide=deck.slides[2];
+  const image=(index:number)=>({src:'/assets/water-lab.webp',alt:'Иллюстрация '+index});
+  const frames=['title','body','image','image-2','image-3'].map((id,i)=>({
+    id,x:i*12,y:i*5,w:10,h:20,rotation:0,
+  }));
+  const setup=await app.inject({method:'PATCH',url:root,payload:{op:{
+    kind:'slide',slideId:slide.id,baseVersion:slide.version,
+    changes:{layout:'image-grid',image:image(1),additionalImages:[image(2),image(3)],freeLayout:{items:frames}},
+  }}});
+  assert.equal(setup.statusCode,200,setup.body);
+  const before=setup.json<Deck>();
+  const send=async (clientId:string,text:string,slideId=slide.id)=>{
+    const response=await app.inject({method:'POST',url:root+'/assistant',payload:{clientId,locale:'ru',slideId,text}});
+    assert.equal(response.statusCode,200);
+    return snapshots(response.body).at(-1)?.messages.at(-1);
+  };
+  const ambiguous=await send('which-image','Удали картинку со слайда 3');
+  assert.equal(ambiguous?.proposal,undefined);
+  assert.match(ambiguous?.text ?? '',/какое изображение/iu);
+  const scoped=await send('numbered-image','Удали картинку № 2');
+  assert.deepEqual(scoped?.proposal?.changes?.map(change=>change.slideId),[slide.id]);
+  assert.deepEqual(scoped?.proposal?.changes?.[0].after?.additionalImages,[image(3)]);
+  const primary=await send('primary-image','Удали картинку № 1 со слайда 3',deck.slides[0].id);
+  assert.deepEqual(primary?.proposal?.changes?.map(change=>change.slideId),[slide.id]);
+  const after=primary?.proposal?.changes?.[0].after;
+  assert.deepEqual(after?.image,image(2));
+  assert.deepEqual(after?.additionalImages,[image(3)]);
+  const previous=before.slides[2].freeLayout?.items ?? [];
+  assert.deepEqual(after?.freeLayout?.items.slice(0,4),[
+    ...previous.slice(0,2),{...previous[3],id:'image'},{...previous[4],id:'image-2'},
+  ]);
+  assert.deepEqual((await app.inject({url:root})).json<Deck>(),before);
+});
+
 test('a selected-slide shortening rewrites a dense sentence without changing its figures or target', async t=>{
   agentSettings(t,{ALEM_API_KEY:'unused',STUDIO_ASSISTANT_OLLAMA_MODEL:'lesson',STUDIO_EMBEDDING_MODEL:'',STUDIO_MEM0_URL:'',STUDIO_OLLAMA_URL:'http://127.0.0.1:11434'});
   const app=createStudioServer({dbPath:':memory:'});
@@ -198,6 +282,68 @@ test('a selected-slide shortening rewrites a dense sentence without changing its
   assert.deepEqual((await app.inject({url:root})).json<Deck>(),before);
 });
 
+test('a selected text revision preserves surrounding rich text and discards unrelated model actions',async t=>{
+  agentSettings(t,{STUDIO_ASSISTANT_OLLAMA_MODEL:'lesson',STUDIO_EMBEDDING_MODEL:'',STUDIO_MEM0_URL:'',STUDIO_OLLAMA_URL:'http://127.0.0.1:11434'});
+  const app=createStudioServer({dbPath:':memory:'});
+  t.after(()=>app.close());
+  const root='/api/decks/schoolyard-en', path=root+'/assistant';
+  const deck=(await app.inject({url:root})).json<Deck>();
+  const [slide, other]=deck.slides;
+  const body='Record the measurements in your notebook.';
+  const richText={body:{type:'doc',content:[{type:'paragraph',attrs:{textAlign:'center'},content:[
+    {type:'text',text:'Record ',marks:[{type:'bold'}]},
+    {type:'text',text:'the measurements',marks:[{type:'italic'}]},
+    {type:'text',text:' in your notebook.'},
+  ]}]}};
+  const updated=await app.inject({method:'PATCH',url:root,payload:{op:{
+    kind:'slide',slideId:slide.id,baseVersion:slide.version,changes:{body,richText},
+  }}});
+  assert.equal(updated.statusCode,200);
+  const before=updated.json<Deck>();
+  const canvasScope={field:'body',selection:{start:7,end:23,text:'the measurements'}};
+  const afterBody='Record the readings in your notebook.';
+  t.mock.method(globalThis,'fetch',async (url:URL,request:RequestInit)=>{
+    assert.equal(url.origin,'http://127.0.0.1:11434');
+    if(url.pathname==='/api/tags') return Response.json({models:[{name:'lesson:latest',digest:'abc',details:{format:'gguf'}}]});
+    const messages=JSON.parse(String(request.body)).messages;
+    assert.match(messages[0].content,/only the replacement for selection.text/);
+    assert.deepEqual(JSON.parse(messages[1].content).canvasScope,{...canvasScope,slideId:slide.id});
+    const actions=[
+      {tool:'edit_deck',title:'Unrelated deck title'},
+      {tool:'edit_slide',slideId:other.id,changes:{body:'Unrelated slide change'}},
+      {tool:'edit_slide',slideId:slide.id,changes:{title:'Unrelated field',notes:'Unrelated notes',body:'the readings'}},
+    ];
+    return Response.json({message:{content:JSON.stringify({reply:'I prepared these changes for your review.',actions})}});
+  });
+  const response=await app.inject({method:'POST',url:path,payload:{
+    clientId:'canvas-range',locale:'en',slideId:slide.id,text:'Simplify selected text. Slide 2 is unrelated.',canvasScope,
+  }});
+  assert.equal(response.statusCode,200);
+  const transcript=snapshots(response.body).at(-1)!.messages;
+  assert.deepEqual(transcript.at(-2)?.canvasScope,canvasScope);
+  const proposal=transcript.at(-1)?.proposal;
+  assert.deepEqual(proposal?.changes?.map(change=>change.slideId),[slide.id]);
+  const draft=proposal?.changes?.[0].after;
+  assert.equal(draft?.title,slide.title);
+  assert.equal(draft?.notes,slide.notes);
+  assert.equal(draft?.body,afterBody);
+  assert.deepEqual(draft?.bodyRuns,[
+    {text:'Record ',bold:true},{text:'the readings',italic:true},{text:' in your notebook.'},
+  ]);
+  assert.deepEqual((draft?.richText?.body?.content as typeof richText.body.content)[0].attrs,{textAlign:'center'});
+  assert.deepEqual((await app.inject({url:root})).json<Deck>(),before);
+  const applied=await app.inject({method:'POST',url:path+'/proposals/canvas-range',payload:{action:'apply'}});
+  assert.equal(applied.statusCode,200);
+  const saved=applied.json<AssistantSnapshot>().deck!;
+  assert.equal(saved.title,deck.title);
+  assert.equal(saved.slides[0].body,afterBody);
+  assert.deepEqual(saved.slides[1],other);
+  const stale=await app.inject({method:'POST',url:path,payload:{
+    clientId:'canvas-stale-range',locale:'en',slideId:slide.id,text:'Simplify selected text.',canvasScope,
+  }});
+  assert.equal(stale.statusCode,409);
+});
+
 test('stopping an in-flight assistant edit settles its active tool and saves no proposal', async t=>{
   agentSettings(t,{STUDIO_ASSISTANT_OLLAMA_MODEL:'lesson',STUDIO_EMBEDDING_MODEL:'',STUDIO_MEM0_URL:'',STUDIO_OLLAMA_URL:'http://127.0.0.1:11434'});
   const app=createStudioServer({dbPath:':memory:'});
@@ -230,6 +376,48 @@ test('stopping an in-flight assistant edit settles its active tool and saves no 
   assert.deepEqual(history,ended);
   assert.equal(history?.proposal,undefined);
   assert.deepEqual((await app.inject({url:root})).json<Deck>(),before);
+});
+
+test('a canvas object proposal targets one object and can be restored as one edit',async t=>{
+  agentSettings(t,{STUDIO_ASSISTANT_OLLAMA_MODEL:'lesson',STUDIO_EMBEDDING_MODEL:'',STUDIO_MEM0_URL:'',STUDIO_OLLAMA_URL:'http://127.0.0.1:11434'});
+  const app=createStudioServer({dbPath:':memory:'});
+  t.after(()=>app.close());
+  const root='/api/decks/schoolyard-en', path=root+'/assistant';
+  const deck=(await app.inject({url:root})).json<Deck>();
+  const slide=deck.slides[0];
+  const box={id:crypto.randomUUID(),kind:'text' as const,text:'Describe your observations.',color:'#123456',
+    x:10,y:70,w:35,h:15,rotation:0,fontSize:24,bold:false,align:'left' as const};
+  const arrow={id:crypto.randomUUID(),kind:'arrow' as const,color:'#123456',x:50,y:70,w:20,h:15,rotation:0};
+  const update=await app.inject({method:'PATCH',url:root,payload:{op:{kind:'slide',slideId:slide.id,baseVersion:slide.version,changes:{objects:[box,arrow]}}}});
+  assert.equal(update.statusCode,200);
+  const before=update.json<Deck>();
+  const canvasScope={field:'object',objectId:box.id,version:before.slides[0].version,theme:before.theme};
+  t.mock.method(globalThis,'fetch',async (url:URL,request:RequestInit)=>{
+    assert.equal(url.origin,'http://127.0.0.1:11434');
+    if(url.pathname==='/api/tags') return Response.json({models:[{name:'lesson:latest',digest:'abc',details:{format:'gguf'}}]});
+    const messages=JSON.parse(String(request.body)).messages;
+    assert.deepEqual(JSON.parse(messages[1].content).canvasScope,{...canvasScope,slideId:slide.id,object:box});
+    const actions=[
+      {tool:'edit_slide',slideId:slide.id,changes:{title:'Unrelated title'}},
+      {tool:'edit_object',slideId:slide.id,objectId:arrow.id,changes:{},remove:true},
+      {tool:'edit_object',slideId:slide.id,objectId:box.id,changes:{text:'Share what you saw.',color:'#264488'}},
+    ];
+    return Response.json({message:{content:JSON.stringify({reply:'I prepared these changes for your review.',actions})}});
+  });
+  const payload={clientId:'selected-object',locale:'en',slideId:slide.id,text:'Simplify the selected text box.',canvasScope};
+  const response=await app.inject({method:'POST',url:path,payload});
+  assert.equal(response.statusCode,200);
+  const proposal=snapshots(response.body).at(-1)?.messages.at(-1)?.proposal;
+  const objects=[{...box,text:'Share what you saw.',color:'#264488'},arrow];
+  assert.deepEqual(proposal?.actions.map(action=>action.kind),['edit_object']);
+  assert.deepEqual(proposal?.changes?.[0].after?.objects,objects);
+  assert.equal(proposal?.changes?.[0].after?.title,slide.title);
+  assert.deepEqual((await app.inject({url:root})).json<Deck>(),before);
+  const decision=(action:string)=>app.inject({method:'POST',url:path+'/proposals/selected-object',payload:{action}});
+  assert.deepEqual((await decision('apply')).json<AssistantSnapshot>().deck?.slides[0].objects,objects);
+  const stale=await app.inject({method:'POST',url:path,payload:{...payload,clientId:'stale-object'}});
+  assert.equal(stale.statusCode,409);
+  assert.deepEqual((await decision('restore')).json<AssistantSnapshot>().deck?.slides[0].objects,[box,arrow]);
 });
 
 test('teaching memory is durable, deck-scoped, deduplicated and removable', async (t) => {
@@ -271,6 +459,90 @@ test('the selected numeric table becomes a reviewable chart with the same values
   assert.deepEqual(changes?.[0].before?.table,slide.table);
   assert.deepEqual(changes?.[0].after?.chart?.series[0].values,slide.table!.rows.map(row=>row[1]));
   assert.deepEqual((await app.inject({url:root})).json<Deck>(),original);
+});
+
+test('an informal image and chart request moves the existing picture and asks for chart data', async t=>{
+  agentSettings(t,{STUDIO_MODERATION_OLLAMA_MODEL:'',STUDIO_AUTH_MODE:''});
+  const app=createStudioServer({dbPath:':memory:'});
+  t.after(()=>app.close());
+  const root='/api/decks/schoolyard-ru';
+  const original=(await app.inject({url:root})).json<Deck>();
+  const slide=original.slides[2];
+  const image={src:'/assets/seedling-growth.webp',alt:'Росток фасоли'};
+  const update=await app.inject({method:'PATCH',url:root,payload:{op:{kind:'slide',slideId:slide.id,baseVersion:slide.version,
+    changes:{layout:'image-full',image,body:'Как определить, что ответ соответствует требованиям?',notes:'Оцените 1) точность и 2) понимание.'}}}});
+  assert.equal(update.statusCode,200,update.body);
+  const before=update.json<Deck>();
+  const fetch=t.mock.method(globalThis,'fetch',async ()=>{throw new Error('Unexpected model call');});
+  const response=await app.inject({method:'POST',url:root+'/assistant',payload:{
+    clientId:'image-and-chart',locale:'ru',slideId:slide.id,text:'Сделай члайд нормальнм, добавь графики, картинка не фон а сбоку',
+  }});
+  assert.equal(response.statusCode,200,response.body);
+  const message=snapshots(response.body).at(-1)?.messages.at(-1);
+  assert.match(message?.text ?? '',/категории и числовые значения/u);
+  assert.equal(message?.citations,undefined);
+  assert.equal(fetch.mock.callCount(),0);
+  assert.equal(message?.proposal?.status,'pending');
+  assert.deepEqual(message?.proposal?.changes?.map(change=>change.slideId),[slide.id]);
+  const moved=message?.proposal?.changes?.[0].after;
+  assert.deepEqual(moved,{...before.slides[2],layout:'image-right',version:before.slides[2].version+1});
+  assert.deepEqual((await app.inject({url:root})).json<Deck>(),before);
+  const applied=await app.inject({method:'POST',url:root+'/assistant/proposals/image-and-chart',payload:{action:'apply'}});
+  assert.equal(applied.statusCode,200,applied.body);
+  assert.deepEqual(applied.json<AssistantSnapshot>().deck?.slides[2],moved);
+});
+
+test('images can be placed beside the text with a real chart and preserved teaching details', async t=>{
+  agentSettings(t,{STUDIO_MODERATION_OLLAMA_MODEL:'',STUDIO_AUTH_MODE:''});
+  const app=createStudioServer({dbPath:':memory:'});
+  t.after(()=>app.close());
+  const root='/api/decks/schoolyard-en';
+  const original=(await app.inject({url:root})).json<Deck>();
+  const slide=original.slides[2];
+  const image={src:'/assets/water-lab.webp',alt:'Three measuring vessels'};
+  const table={headers:['Vessel','Volume'],rows:[['A',12],['B','15,5']]};
+  const cards=[{title:'Compare',text:'Use the same unit.'}];
+  const update=await app.inject({method:'PATCH',url:root,payload:{op:{kind:'slide',slideId:slide.id,baseVersion:slide.version,
+    changes:{layout:'image-full',image,table,design:{variant:'opening',cards}}}}});
+  assert.equal(update.statusCode,200,update.body);
+  const response=await app.inject({method:'POST',url:root+'/assistant',payload:{
+    clientId:'image-and-data',locale:'en',slideId:slide.id,canvasScope:{field:'slide'},
+    text:'Add a chart and move the image to the left.',
+  }});
+  assert.equal(response.statusCode,200,response.body);
+  const pending=snapshots(response.body).at(-1)?.messages.at(-1)?.proposal;
+  const moved=pending?.changes?.[0].after;
+  assert.equal(pending?.status,'pending');
+  assert.equal(moved?.layout,'image-left');
+  assert.deepEqual(moved?.image,image);
+  assert.deepEqual(moved?.table,table);
+  assert.deepEqual(moved?.chart?.series,[{name:'Volume',values:[12,15.5]}]);
+  assert.deepEqual(moved?.design?.cards,cards);
+});
+
+test('a picture can be placed in free space without moving manual text frames', async t=>{
+  agentSettings(t,{STUDIO_MODERATION_OLLAMA_MODEL:'',STUDIO_AUTH_MODE:''});
+  const app=createStudioServer({dbPath:':memory:'});
+  t.after(()=>app.close());
+  const root='/api/decks/schoolyard-en';
+  const deck=(await app.inject({url:root})).json<Deck>();
+  const slide=deck.slides[2];
+  const title={id:'title',x:6,y:10,w:42,h:15,rotation:0};
+  const body={id:'body',x:6,y:30,w:42,h:58,rotation:0};
+  const eyebrow={id:'eyebrow',x:6,y:5,w:42,h:4,rotation:0};
+  const image={id:'image',x:0,y:0,w:100,h:100,rotation:0};
+  const update=await app.inject({method:'PATCH',url:root,payload:{op:{kind:'slide',slideId:slide.id,baseVersion:slide.version,
+    changes:{layout:'image-full',image:{src:'/assets/water-lab.webp',alt:'Vessels'},freeLayout:{items:[image,title,body,eyebrow]}}}}});
+  assert.equal(update.statusCode,200,update.body);
+  const response=await app.inject({method:'POST',url:root+'/assistant',payload:{
+    clientId:'move-free-image',locale:'en',slideId:slide.id,text:'Put the image beside the text.',
+  }});
+  const pending=snapshots(response.body).at(-1)?.messages.at(-1)?.proposal;
+  assert.equal(pending?.status,'pending');
+  const after=pending?.changes?.[0].after;
+  assert.equal(after?.layout,'image-right');
+  assert.deepEqual(after?.freeLayout?.items.slice(1),[title,body,eyebrow]);
+  assert.ok((after?.freeLayout?.items[0].x ?? 0)>52);
 });
 
 function agentSettings(t: import('node:test').TestContext, settings:Record<string,string>) {

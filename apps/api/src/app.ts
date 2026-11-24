@@ -15,6 +15,7 @@ import { researchCapabilities } from './authoring/research';
 import { localAuthoringModel } from './authoring/local-generation';
 import { hasAlem } from './authoring/alem';
 import { cloudSourceRagAvailable, DeckAssistant } from './assistant/assistant';
+import { assistantWebResearchAvailable } from './assistant/web-research';
 import { registerAssistantRoutes } from './assistant/routes';
 import { createInput, decideInput, editInput, proposeInput, retryInput } from '@sabaq/contracts/schema';
 import { StudioStore } from './persistence/storage';
@@ -166,7 +167,7 @@ export function createStudioServer(
         grades:{min:t.min,max:t.max},theme:t.theme,plan:templatePlan(id,language,topic || t.topic[language],7)};
     })];
   });
-  app.get('/api/capabilities', async req => ({ coedit, usageAdmin:access.principal(req)?.admin===true, organizationAdmin:access.principal(req)?.orgAdmin===true, alem: hasAlem(), cloudSourceRag:cloudSourceRagAvailable(), localAuthoring: Boolean(localAuthoringModel()), localAssistant:Boolean(process.env.STUDIO_ASSISTANT_OLLAMA_MODEL?.trim()), researchTopics: researchCapabilities(), accounts: access.enabled }));
+  app.get('/api/capabilities', async req => ({ coedit, usageAdmin:access.principal(req)?.admin===true, organizationAdmin:access.principal(req)?.orgAdmin===true, alem: hasAlem(), cloudSourceRag:cloudSourceRagAvailable(), assistantWebResearch:assistantWebResearchAvailable(), localAuthoring: Boolean(localAuthoringModel()), localAssistant:Boolean(process.env.STUDIO_ASSISTANT_OLLAMA_MODEL?.trim()), researchTopics: researchCapabilities(), accounts: access.enabled }));
   const visibleDecks = (req: import('fastify').FastifyRequest) => {
     const ids = access.visibleIds(req);
     return ids ? ids.map(id => studio.deck(id)) : studio.list();
