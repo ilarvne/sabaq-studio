@@ -9,19 +9,38 @@
   container-type: inline-size;
 }
 .home-prompt { margin: 0; color: var(--foreground); border-radius: inherit; }
-.home-prompt-surface { min-width: 0; padding: 17px 16px 13px; border-radius: var(--border-glow-radius, 22px); }
-.home-prompt:has(.home-prompt-input:focus-visible) { border-radius: var(--border-glow-radius, 22px); outline: 2px solid var(--ring); outline-offset: 2px; }
+.home-prompt-surface { min-width: 0; padding: 18px 18px 14px; border-radius: var(--border-glow-radius, 22px); }
 .home-prompt-surface[data-dragging] { outline: 2px dashed var(--ring); outline-offset: -3px; background: var(--selection); }
 .home-prompt-input {
-  display: block; width: 100%; min-width: 0; min-height: 59px;
+  display: block; width: 100%; min-width: 0; min-height: 66px;
   border: 0; outline: none; padding: 3px 5px 8px; background: transparent; resize: none;
   color: var(--foreground); caret-color: var(--primary-ink);
   font: inherit; font-size: clamp(15px, 1.16vw, 17px); line-height: 1.48; text-align: start;
 }
 .home-prompt-input::placeholder { color: var(--prompt-subtle); opacity: 1; }
 .home-prompt-input:focus-visible { outline: none; }
-.home-prompt-toolbar { display: flex; align-items: center; gap: 5px; min-width: 0; margin-top: 4px; }
-.home-prompt-spacer { flex: 1; }
+.home-prompt-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 12px;
+  min-width: 0;
+  margin-top: 6px;
+}
+.home-prompt-context,
+.home-prompt-output {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+.home-prompt-output { justify-content: flex-end; }
+.home-prompt-context .as-research-trigger {
+  min-height: 34px;
+  padding-inline: 8px;
+  font-size: 12px;
+  font-weight: 540;
+}
 .home-prompt-toolbar :is(.home-prompt-attach, .home-prompt-send, .home-prompt-images, .home-prompt-mic) {
   display: inline-flex; align-items: center; justify-content: center;
   flex: none; width: 38px; height: 38px; padding: 0; border-radius: 50%;
@@ -29,12 +48,23 @@
 }
 .home-prompt-toolbar .home-prompt-attach { border-color: var(--prompt-divider); width: 38px; height: 38px; }
 .home-prompt-toolbar .home-prompt-attach svg { width: 19px; height: 19px; }
+.home-prompt-toolbar .home-prompt-attach > svg { color: var(--workspace-teal-ink); }
+.home-prompt-context .as-research-trigger > [data-icon='inline-start'] { color: var(--workspace-blue-ink); }
+.home-prompt-toolbar .brief-chip[data-brief-field='level'] > svg,
+.home-prompt-settings > svg:first-child { color: var(--workspace-violet-ink); }
+.home-prompt-toolbar .brief-chip[data-brief-field='duration'] > svg { color: var(--workspace-amber-ink); }
+.home-prompt-toolbar .home-prompt-images > svg { color: var(--workspace-rose-ink); }
 .home-prompt-toolbar :is(.home-prompt-images,.home-prompt-mic) { width: 34px; height: 34px; }
 .home-prompt-toolbar :is(.home-prompt-images,.home-prompt-mic) svg { width: 17px; height: 17px; }
 .home-prompt-toolbar .home-prompt-settings {
   display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 10px; border: 0;
-  border-radius: 99px; background: var(--prompt-control); box-shadow: none;
+  border-radius: 8px; background: var(--prompt-control); box-shadow: none;
   color: var(--prompt-ink); font-size: 12.5px; font-weight: 520;
+}
+.home-prompt-settings > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .home-prompt-settings > svg:first-child { width: 14px; height: 14px; }
 .home-prompt-settings > svg:last-child { width: 10px; height: 10px; }
@@ -88,21 +118,22 @@
   .home-prompt-spinner { animation: home-prompt-spin 850ms linear infinite; }
   @keyframes home-prompt-spin { to { transform: rotate(360deg); } }
 }
-@container (max-width: 450px) {
-  .home-prompt-surface { padding: 13px 10px 9px; }
-  .home-prompt-input { padding-inline: 3px; min-height: 76px; }
-  .home-prompt-toolbar { gap: 5px; flex-wrap: wrap; }
-  .home-prompt-toolbar .brief-controls {
-    order: -1;
-    flex-basis: 100%;
-    gap: 6px;
-    margin: 0 0 4px;
-    padding: 0 0 7px;
-    border-inline-start: 0;
-    border-bottom: 1px solid var(--prompt-divider);
+@container (max-width: 610px) {
+  .home-prompt-surface { padding: 14px 12px 11px; }
+  .home-prompt-input { padding-inline: 3px; min-height: 62px; }
+  .home-prompt-toolbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
   }
-  .home-prompt-toolbar .brief-controls .brief-chip { width: auto; padding-inline: 7px; }
+  .home-prompt-context { flex-wrap: wrap; }
+  .home-prompt-toolbar .brief-controls {
+    gap: 2px;
+    max-width: 100%;
+  }
+  .home-prompt-toolbar .brief-controls .brief-chip { flex-shrink: 1; width: auto; padding-inline: 6px; }
   .home-prompt-toolbar .brief-controls .brief-chip > span { display: inline; }
+  .home-prompt-toolbar .home-prompt-settings { flex-shrink: 1; min-width: 0; }
 }
 @container (max-width: 300px) {
   .home-prompt-settings > svg:last-child { display: none; }
@@ -160,7 +191,4 @@
 @container (max-width: 400px) {
   .home-prompt-toolbar .home-prompt-settings { min-width: 32px; padding-inline: 7px; }
   .home-prompt-toolbar:has(.home-cloud-dictation) .home-prompt-settings > svg:last-child { display: none; }
-}
-@container (max-width: 345px) {
-  .home-prompt-toolbar:has(.home-cloud-dictation) .home-prompt-settings span { display: none; }
 }

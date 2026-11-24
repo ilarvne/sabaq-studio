@@ -49,10 +49,14 @@ test('the composer requests approval for scanned PDFs and inserts Alem dictation
     expect(approvedReads).toBe(0);
     await dialog.accept();
   });
-  const file = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: 'Attach source material' }).click();
+  const picker = page.getByRole('dialog', { name: 'Add files', exact: true });
+  await picker.getByRole('tab', { name: 'Upload', exact: true }).click();
+  const file = page.waitForEvent('filechooser');
+  await picker.getByRole('button', { name: 'Choose files', exact: true }).click();
   await (await file).setFiles({ name: 'diagram.pdf', mimeType: 'application/pdf', buffer: Buffer.from('mock PDF') });
-  await expect(page.locator('.as-file')).toHaveAttribute('data-status', 'requires-action');
+  await picker.getByRole('button', { name: 'Use selected files' }).click();
+  await expect(page.locator('.as-file')).toHaveAttribute('data-status', 'complete');
   expect(approvedReads).toBe(1);
 });
 

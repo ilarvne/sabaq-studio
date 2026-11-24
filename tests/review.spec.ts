@@ -43,8 +43,7 @@ test('jump directly to a named slide in the editor and export preview', async ({
   await expect(page.locator('.ed-stage article')).toHaveAttribute('data-slide-id',deck.slides[index].id);
   await page.getByRole('tab',{name:'Design',exact:true}).click();
   await expect(page.locator('.inspect-design h2').first()).toHaveText(deck.slides[index].title);
-  await page.getByRole('button',{name:'Lesson actions'}).click();
-  await page.getByRole('menuitem',{name:'Export',exact:true}).click();
+  await page.getByRole('button',{name:'Export',exact:true}).click();
   const dialog = page.getByRole('dialog');
   const preview = dialog.getByRole('combobox',{name:'Go to slide',exact:true});
   await expect(preview).toHaveValue(String(index));
@@ -90,8 +89,7 @@ test('a phone can edit slide text and open the presenter poll without horizontal
 
 test('export downloads the saved lesson as a PowerPoint file', async ({page})=>{
   await page.goto('/#/deck/schoolyard-en');
-  await page.getByRole('button',{name:'Lesson actions'}).click();
-  await page.getByRole('menuitem',{name:'Export',exact:true}).click();
+  await page.getByRole('button',{name:'Export',exact:true}).click();
   const dialog=page.getByRole('dialog');
   const pending=page.waitForEvent('download');
   await dialog.getByRole('button',{name:'Download PowerPoint',exact:true}).click();
@@ -273,8 +271,7 @@ test('video export renders server progress, cancels, and offers download for the
 
 test('export downloads the selected slide as a PNG file', async ({ page }) => {
   await page.goto('/#/deck/schoolyard-en');
-  await page.getByRole('button', { name: 'Lesson actions' }).click();
-  await page.getByRole('menuitem', { name: 'Export', exact: true }).click();
+  await page.getByRole('button', { name: 'Export', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await dialog.getByRole('button', { name: /PNG/ }).click();
   await expect(dialog.getByText('One slide', { exact: true })).toBeVisible();

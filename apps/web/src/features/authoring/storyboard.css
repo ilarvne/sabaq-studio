@@ -58,17 +58,6 @@
 .sb-preview:not([data-status=generating]) .sb-plan-copy { width:100%; }
 .sb-preview:not([data-status=generating]) .sb-plan-copy p,.sb-preview:not([data-status=generating]) .sb-preview-state { color:var(--muted-foreground); }
 .sb-preview[data-status=failed] .sb-preview-state { color:var(--danger-ink); }
-.sb-preview[data-status=generating] .sb-plan-copy > * { animation:sb-text-in 400ms cubic-bezier(.2,.8,.2,1) backwards; }
-.sb-preview[data-status=generating] .sb-plan-copy > p { animation-delay:50ms; }
-.sb-canvas { animation:sb-slide-in 400ms cubic-bezier(.2,.8,.2,1) both; }
-.sb-canvas img { animation:sb-image-in 400ms cubic-bezier(.2,.8,.2,1) 50ms backwards; }
-@keyframes sb-slide-in { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:translateY(0); } }
-@keyframes sb-text-in { from { opacity:0; transform:translateY(3px); } to { opacity:1; transform:translateY(0); } }
-@keyframes sb-image-in { from { opacity:0; filter:blur(3px); } to { opacity:1; filter:blur(0); } }
-@keyframes sb-fade-in { from { opacity:0; } to { opacity:1; } }
-@media (prefers-reduced-motion:reduce) {
-  .sb-canvas,.sb-canvas img,.sb-preview[data-status=generating] .sb-plan-copy > * { animation:sb-fade-in 200ms ease-out both; }
-}
 .sb-empty { max-width:600px; padding:12px 0; }
 .sb-empty h2 { font-size:18px; }
 .sb-empty [data-slot=button] { margin-top:12px; }

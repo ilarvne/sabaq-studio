@@ -1,14 +1,13 @@
-import { useId, useState, type ReactNode } from 'react';
+import { useId, useRef, type ReactNode, useState } from 'react';
 import {
-  ArrowRightIcon,
-  BookOpenIcon,
   CaretDownIcon,
   CaretRightIcon,
-  ClockCounterClockwiseIcon,
+  MagnifyingGlassIcon,
   MoonIcon,
   PlusIcon,
   PresentationIcon,
   SunIcon,
+  XIcon,
 } from '@phosphor-icons/react';
 import type { Deck, Locale } from '@sabaq/lesson/types';
 import { languages, words } from './copy';
@@ -25,46 +24,54 @@ import {
 import {
   Sidebar,
   SidebarContent,
-  SidebarFooter,
   SidebarGroup,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
-  SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   SidebarProvider,
   SidebarTrigger,
   useSidebar,
 } from './components/shadcn/sidebar';
-import { workspaceDestinations } from './components/DeckNavigation';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './components/shadcn/collapsible';
+import { Kbd } from './components/shadcn/kbd';
+import { SlideIndex, workspaceDestinations } from './components/DeckNavigation';
 import { LanguageFlag } from './components/LanguageFlag';
 import { Skeleton } from './components/shadcn/skeleton';
-import {
-  Dialog,
-  DialogClose,
-  DialogDescription,
-  DialogHeader,
-  DialogPopup,
-  DialogTitle,
-} from './components/coss/dialog';
 import { homeCopy } from './features/home/home-copy';
+import { SidebarFiles } from './features/sources/SidebarFiles';
 import './studio-navigation.css';
 
-type StudioPage = 'home' | 'library' | 'files' | 'templates' | 'start';
-interface NavigationProps {
-  page: StudioPage;
+type StudioPage = 'home' | 'library' | 'files' | 'templates' | 'start' | 'deck';
+export interface StudioNavigationState {
   locale: Locale;
   dark: boolean;
   recent: Deck[];
   loading: boolean;
   search: ReactNode;
-  children: ReactNode;
+  statusPanel?: ReactNode;
+  sidebarOpen: boolean;
+  onSidebarOpen: (open: boolean) => void;
   onLocale: (value: Locale) => void;
   onAppearance: (dark: boolean) => void;
   onNew: () => void;
+  onSearch: () => void;
+}
+interface NavigationProps extends StudioNavigationState {
+  page: StudioPage;
+  children: ReactNode;
+  document?: { title: ReactNode; actions?: ReactNode; deck?: Deck };
 }
 
 const recentPageSize = 6;
+
+const navigationLabels = {
+  en: { search: 'Search', library: 'Lessons', files: 'Files', add: 'New' },
+  kk: { search: 'Іздеу', library: 'Сабақтар', files: 'Файлдар', add: 'Жаңа' },
+  ru: { search: 'Поиск', library: 'Уроки', files: 'Файлы', add: 'Новый' },
+};
 
 export function StudioLanguagePicker({locale, onLocale}: Pick<NavigationProps, 'locale' | 'onLocale'>) {
   const t = words[locale];
@@ -100,6 +107,59 @@ export function StudioLanguagePicker({locale, onLocale}: Pick<NavigationProps, '
   );
 }
 
+function RecentLessons({locale, recent, loading, onNavigate}: {
+  locale: Locale;
+  recent: Deck[];
+  loading: boolean;
+  onNavigate: () => void;
+}) {
+  const c = homeCopy[locale];
+  const [showMore, setShowMore] = useState(false);
+  const headingId = useId();
+  const listId = useId();
+  return (
+    <SidebarGroup className="creation-recent-nav" role="navigation" aria-labelledby={headingId}>
+      <Collapsible defaultOpen>
+        <div className="creation-recent-heading">
+          <h2 id={headingId}>
+            <CollapsibleTrigger className="creation-disclosure">
+              <CaretRightIcon aria-hidden="true" />
+              {c.recent}
+            </CollapsibleTrigger>
+          </h2>
+        </div>
+        <CollapsibleContent className="creation-disclosure-content">
+          {loading ? (
+            <div className="creation-nav-skeleton" aria-hidden="true"><Skeleton /><Skeleton /><Skeleton /></div>
+          ) : (
+            <>
+              <SidebarMenuSub id={listId}>
+                {recent.slice(0, showMore ? recentPageSize * 2 : recentPageSize).map((deck) => (
+                  <SidebarMenuSubItem key={deck.id}>
+                    <SidebarMenuSubButton render={<a href={`#/deck/${encodeURIComponent(deck.id)}`} onClick={onNavigate} />}>
+                      <PresentationIcon aria-hidden="true" />
+                      <span lang={deck.language}>{deck.title}</span>
+                    </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                ))}
+              </SidebarMenuSub>
+              {recent.length > recentPageSize && (
+                <button type="button" className="creation-recent-expand"
+                  aria-expanded={showMore} aria-controls={listId}
+                  aria-label={showMore ? c.fewerRecent : c.moreRecent}
+                  onClick={() => setShowMore(expanded => !expanded)}>
+                  <CaretDownIcon aria-hidden="true" />
+                  {showMore ? c.fewer : c.more}
+                </button>
+              )}
+            </>
+          )}
+        </CollapsibleContent>
+      </Collapsible>
+    </SidebarGroup>
+  );
+}
+
 function NavigationContent({
   page,
   locale,
@@ -107,139 +167,111 @@ function NavigationContent({
   recent,
   loading,
   search,
+  statusPanel,
   children,
+  document: deckPage,
   onLocale,
   onAppearance,
   onNew,
+  onSearch,
 }: NavigationProps) {
   const c = homeCopy[locale];
   const t = words[locale];
-  const { setOpenMobile } = useSidebar();
-  const [guideOpen, setGuideOpen] = useState(false);
-  const [recentExpanded, setRecentExpanded] = useState(false);
-  const recentHeadingId = useId();
-  const recentListId = useId();
+  const { isMobile, open, openMobile, setOpenMobile } = useSidebar();
+  const labels = navigationLabels[locale];
+  const afterDrawerClose = useRef<(() => void) | null>(null);
+  const topbar = useRef<HTMLElement>(null);
+  const panelId = useId();
   const closeNav = () => setOpenMobile(false);
+  const focusToggle = () => topbar.current?.querySelector<HTMLButtonElement>('[data-slot="sidebar-trigger"]')?.focus();
+  const runFromNav = (action: () => void) => {
+    if (isMobile) {
+      afterDrawerClose.current = action;
+      closeNav();
+    } else {
+      action();
+    }
+  };
   const nav = workspaceDestinations(locale);
   const current = nav.find((item) => item.page === page)?.title ?? t.newLesson;
+  const showPanel = isMobile || open;
+  const shortcut = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘ K' : 'Ctrl K';
   return (
     <>
-      <Sidebar className="creation-sidebar" mobileTitle={c.workspace}>
-        <SidebarHeader className="creation-sidebar-head">
-          <a
-            href="#/home"
-            className="creation-brand"
-            onClick={closeNav}
-            aria-label={`Sabaq Studio · ${c.home}`}
-          >
-            <img src="/sabaq-mark.svg" width="34" height="34" alt="" />
-            <span>
-              Sabaq <b>Studio</b>
-            </span>
-          </a>
-          <Button
-            className="creation-new"
-            onClick={() => {
-              closeNav();
-              onNew();
-            }}
-          >
-            <PlusIcon weight="bold" />
-            {t.newLesson}
-          </Button>
-        </SidebarHeader>
-        <SidebarContent className="creation-side-scroll">
-          <SidebarGroup className="creation-nav-group">
-            <SidebarGroupLabel>{c.workspace}</SidebarGroupLabel>
-            <nav aria-label={c.workspace}>
+      <Sidebar className="creation-sidebar" collapsible="icon" mobileTitle={c.workspace}
+        mobileFinalFocus={() => !afterDrawerClose.current}
+        onMobileClose={() => {
+          const action = afterDrawerClose.current;
+          afterDrawerClose.current = null;
+          if (action) requestAnimationFrame(action);
+        }}>
+        <div className="creation-nav-layout">
+          <div className="creation-nav-rail">
+            <a href="#/home" className="creation-brand" onClick={closeNav} aria-label={`Sabaq Studio · ${c.home}`}>
+              <img src="/sabaq-mark.svg" width="34" height="34" alt="" />
+            </a>
+            <nav className="creation-rail-links" aria-label={c.workspace}>
               <SidebarMenu>
                 {nav.map((item) => (
                   <SidebarMenuItem key={item.page}>
-                    <SidebarMenuButton
-                      isActive={page === item.page}
-                      render={
-                        <a
-                          href={`#/${item.page}`}
-                          aria-current={page === item.page ? 'page' : undefined}
-                          onClick={closeNav}
-                        />
-                      }
-                    >
-                      <item.icon weight={page === item.page ? 'fill' : 'regular'} />
-                      <span>{item.title}</span>
-                    </SidebarMenuButton>
+                    <a href={`#/${item.page}`} className="creation-rail-button" data-destination={item.page}
+                      aria-label={locale === 'kk' ? undefined : item.title}
+                      aria-current={page === item.page ? 'page' : undefined} onClick={closeNav}>
+                      <span className="creation-rail-icon"><item.icon aria-hidden="true" weight={page === item.page ? 'fill' : 'duotone'} /></span>
+                      <span className="creation-rail-label">{item.page === 'library' || item.page === 'files' ? labels[item.page] : item.title}</span>
+                    </a>
                   </SidebarMenuItem>
                 ))}
               </SidebarMenu>
             </nav>
-          </SidebarGroup>
-          {(loading || recent.length > 0) && (
-            <SidebarGroup className="creation-nav-group creation-recent-nav" role="navigation" aria-labelledby={recentHeadingId}>
-              <div className="creation-recent-heading">
-                <SidebarGroupLabel id={recentHeadingId}>
-                  <ClockCounterClockwiseIcon aria-hidden="true" />
-                  {c.recent}
-                </SidebarGroupLabel>
-                {!loading && recent.length > recentPageSize && (
-                  <Button type="button" variant="ghost" size="sm" className="creation-recent-expand"
-                    aria-expanded={recentExpanded} aria-controls={recentListId}
-                    aria-label={recentExpanded ? c.fewerRecent : c.moreRecent}
-                    onClick={() => setRecentExpanded(expanded => !expanded)}>
-                    {recentExpanded ? c.fewer : c.more}
-                    <CaretDownIcon aria-hidden="true" />
-                  </Button>
-                )}
+            {!showPanel && page !== 'library' && <Button variant="ghost" className="creation-rail-button creation-rail-new"
+              aria-label={t.newLesson} onClick={onNew}>
+              <span className="creation-rail-icon"><PlusIcon aria-hidden="true" /></span>
+              <span className="creation-rail-label">{labels.add}</span>
+            </Button>}
+          </div>
+          <div className="creation-nav-panel" id={panelId} inert={!showPanel} data-panel-open={showPanel}
+            onKeyDown={event => {
+              if (!isMobile && (event.metaKey || event.ctrlKey) && event.key === 'b') focusToggle();
+            }}>
+            <SidebarHeader className="creation-sidebar-head">
+              <div className="creation-panel-primary">
+                <Button className="creation-new" onClick={() => { closeNav(); onNew(); }}>
+                  <PlusIcon data-icon="inline-start" weight="bold" aria-hidden="true" />{t.newLesson}
+                </Button>
+                {isMobile && <Button variant="ghost" size="icon" className="creation-panel-close"
+                  aria-label={t.close} onClick={closeNav}><XIcon aria-hidden="true" /></Button>}
               </div>
-              {loading ? (
-                <div className="creation-nav-skeleton" aria-hidden="true">
-                  <Skeleton />
-                  <Skeleton />
-                  <Skeleton />
-                </div>
-              ) : (
-                <SidebarMenu id={recentListId}>
-                  {recent.slice(0, recentExpanded ? recentPageSize * 2 : recentPageSize).map((deck) => (
-                    <SidebarMenuItem key={deck.id}>
-                      <SidebarMenuButton render={<a href={`#/deck/${encodeURIComponent(deck.id)}`} onClick={closeNav} />}>
-                        <PresentationIcon aria-hidden="true" />
-                        <span lang={deck.language}>{deck.title}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              )}
-            </SidebarGroup>
-          )}
-        </SidebarContent>
-        <SidebarFooter className="creation-sidebar-footer">
-          <button
-            type="button"
-            className="creation-guide"
-            onClick={() => {
-              closeNav();
-              setGuideOpen(true);
-            }}
-          >
-            <BookOpenIcon className="creation-guide-icon" />
-            <strong>{c.guide}</strong>
-            <span>
-              {c.openGuide}
-              <ArrowRightIcon weight="bold" data-motion-arrow />
-            </span>
-          </button>
-        </SidebarFooter>
+              <Button variant="ghost" className="creation-panel-search" onClick={() => runFromNav(onSearch)}
+                aria-keyshortcuts="Meta+K Control+K">
+                <MagnifyingGlassIcon data-icon="inline-start" aria-hidden="true" />
+                <span>{labels.search}</span>{!isMobile && <Kbd aria-hidden="true">{shortcut}</Kbd>}
+              </Button>
+            </SidebarHeader>
+            <SidebarContent className="creation-side-scroll">
+              <SidebarFiles locale={locale} />
+              {deckPage?.deck && <SlideIndex collapsible locale={locale} deck={deckPage.deck} onJump={target => runFromNav(() => {
+                if (!target.isConnected) return;
+                target.focus({preventScroll:true});
+                target.scrollIntoView({block:'start'});
+              })} />}
+              {!deckPage && (loading || recent.length > 0) && <RecentLessons locale={locale} recent={recent} loading={loading} onNavigate={closeNav} />}
+            </SidebarContent>
+          </div>
+        </div>
       </Sidebar>
       <div className="creation-column">
-        <header className="creation-topbar">
-          <SidebarTrigger aria-label={c.menu} title={c.menu} />
+        <header className="creation-topbar" data-document={Boolean(deckPage)} ref={topbar}>
+          <SidebarTrigger aria-label={c.menu} title={c.menu} aria-expanded={isMobile ? openMobile : open}
+            aria-controls={!isMobile || openMobile ? panelId : undefined} aria-keyshortcuts="Meta+B Control+B" />
           <span className="creation-top-rule" aria-hidden="true" />
-          <div className="creation-breadcrumb">
+          {deckPage ? deckPage.title : <div className="creation-breadcrumb">
             <span>{c.workspace}</span>
             <CaretRightIcon aria-hidden />
             <strong>{current}</strong>
-          </div>
+          </div>}
           <div className="creation-top-actions">
-            {search}
+            {(isMobile || !open) && search}
             <Button
               variant="ghost"
               size="icon"
@@ -252,33 +284,18 @@ function NavigationContent({
             </Button>
             <StudioLanguagePicker locale={locale} onLocale={onLocale} />
           </div>
+          {deckPage?.actions}
         </header>
-        <main className="creation-content">{children}</main>
+        {statusPanel}
+        {deckPage ? <div className="creation-content">{children}</div> : <main className="creation-content">{children}</main>}
       </div>
-      <Dialog open={guideOpen} onOpenChange={setGuideOpen}>
-        <DialogPopup className="creation-guide-dialog" closeProps={{ 'aria-label': t.close }}>
-          <DialogHeader>
-            <DialogTitle>{c.guide}</DialogTitle>
-            <DialogDescription>{c.guideIntro}</DialogDescription>
-          </DialogHeader>
-          <ol>
-            {c.steps.map(([title, description]) => (
-              <li key={title}>
-                <strong>{title}</strong>
-                <p>{description}</p>
-              </li>
-            ))}
-          </ol>
-          <DialogClose render={<Button variant="outline" />}>{t.close}</DialogClose>
-        </DialogPopup>
-      </Dialog>
     </>
   );
 }
 
 export function StudioNavigation(props: NavigationProps) {
   return (
-    <SidebarProvider className="studio-shell creation-shell">
+    <SidebarProvider className="studio-shell creation-shell" open={props.sidebarOpen} onOpenChange={props.onSidebarOpen}>
       <NavigationContent {...props} />
     </SidebarProvider>
   );

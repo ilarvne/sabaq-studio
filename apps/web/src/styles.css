@@ -152,6 +152,7 @@
 }
 
 html, body { min-width: 0; }
+@media (min-width: 768px) { html { scrollbar-gutter: stable; } }
 .ed-slide { --font-ui: "Golos Text Variable", "Golos Text", system-ui, sans-serif; }
 body { margin: 0; }
 ::selection { background: var(--selection); color: var(--foreground); }

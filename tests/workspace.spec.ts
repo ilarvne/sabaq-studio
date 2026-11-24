@@ -30,10 +30,7 @@ test('outline and generation screens allow editing before the deck completes', a
   await page.getByRole('button',{name:'New lesson',exact:true}).click();
   await page.getByLabel('Lesson topic',{exact:true}).fill('Water volume demo');
   await page.getByRole('button',{name:'Continue',exact:true}).click();
-  await page.getByRole('button',{name:'Continue',exact:true}).click();
-  await page.getByRole('button',{name:'Continue',exact:true}).click();
-  await page.getByRole('button',{name:'Continue',exact:true}).click();
-  await page.getByRole('button',{name:'Lesson outline',exact:true}).click();
+  await page.getByRole('button',{name:'Create outline',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Lesson outline'})).toBeVisible();
   await page.getByRole('button',{name:'Generate slides',exact:true}).click();
   await page.getByRole('button',{name:/^Open slide 1 ·/}).first().click();
@@ -88,13 +85,8 @@ test('library and editor work at 375px without a page-level horizontal scroll', 
   await page.goto('/#/library');
   const fits = () => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
   await expect.poll(fits).toBe(true);
-  const templates = page.locator('.library-template-start [data-slot=collapsible-trigger]');
-  await expect(templates).toHaveAttribute('aria-expanded','false');
-  await templates.press('Enter');
-  await expect(page.locator('.library-template-actions button')).toHaveCount(3);
-  await expect(page.locator('.library-template-actions button').first()).toBeVisible();
-  await templates.press('Enter');
-  await expect(templates).toHaveAttribute('aria-expanded','false');
+  await expect(page.locator('.library-dashboard')).toBeVisible();
+  await expect(page.getByRole('heading',{name:'Start from a template'})).toHaveCount(0);
   const filters = page.locator('.library-filter-trigger');
   const search = page.locator('.library-toolbar .search-field');
   await expect.poll(async()=>Math.abs((await filters.boundingBox())!.height-(await search.boundingBox())!.height)).toBeLessThan(1);
@@ -289,9 +281,11 @@ test('the library can preview and present a recent lesson and resume the last op
       expect(card.meta).toBeCloseTo(previous.meta,0);
     }
   }
+  const gridWidth = (await createdCard.boundingBox())!.width;
   await createdCard.getByRole('button',{name:/Preview lesson/}).click();
   const recent=page.locator('.library-recent');
   await expect(recent.getByText('Latest lesson',{exact:true})).toBeVisible();
+  expect((await createdCard.boundingBox())!.width).toBeCloseTo(gridWidth,0);
   const present=recent.getByRole('link',{name:'Present'});
   await expect(present).toBeVisible();
   await expect(recent.getByRole('heading',{name:createdDeck.title})).toBeVisible();

@@ -1,68 +1,109 @@
 .hero-shortcuts {
   display: grid;
   justify-items: center;
-  gap: 14px;
-  margin: 18px auto 0;
+  gap: 9px;
+  width: min(100%, var(--home-composer-width));
+  margin: 16px auto 0;
+  container-type: inline-size;
 }
 .hero-methods {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  width: 100%;
+  gap: 8px;
 }
 .hero-methods .hero-method {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  min-height: 38px;
-  padding: 0 14px;
-  font: 500 13px/1.2 var(--font-ui);
-  border: 1px solid var(--home-border);
-  border-radius: 8px;
-  background: transparent;
+  justify-content: flex-start;
+  height: auto;
+  min-height: 49px;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  border-color: color-mix(in oklab, var(--home-border) 83%, var(--home-ink));
+  background: color-mix(in oklab, var(--home-surface) 95%, transparent);
   color: var(--home-ink);
+  text-align: start;
   text-decoration: none;
+  white-space: normal;
+  font: 540 13px/1.25 var(--font-ui);
 }
-.hero-method svg {
-  width: 15px;
-  height: 15px;
-  color: var(--home-accent-text);
+.hero-method[data-tone='amber'] { --hero-method-ink: var(--workspace-amber-ink); }
+.hero-method[data-tone='teal'] { --hero-method-ink: var(--workspace-teal-ink); }
+.hero-method[data-tone='violet'] { --hero-method-ink: var(--workspace-violet-ink); }
+.hero-method[data-tone='rose'] { --hero-method-ink: var(--workspace-rose-ink); }
+
+.hero-method-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 29px;
+  block-size: 29px;
+  border-radius: 7px;
+  background: color-mix(in oklab, var(--hero-method-ink) 14%, var(--home-surface));
+  color: var(--hero-method-ink);
 }
-.hero-methods .hero-method:hover {
-  border-color: color-mix(in srgb, var(--home-accent) 48%, var(--home-border));
-  background: var(--home-selected);
+.hero-method .hero-method-icon svg {
+  inline-size: 17px;
+  block-size: 17px;
+}
+.hero-methods .hero-method:is(:hover, :focus-visible) {
+  border-color: color-mix(in oklab, var(--hero-method-ink) 45%, var(--home-border));
+  background: color-mix(in oklab, var(--hero-method-ink) 7%, var(--home-surface));
+}
+.hero-methods .hero-method:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }
 .hero-example-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  column-gap: 9px;
-  row-gap: 2px;
+  gap: 2px 6px;
   color: var(--home-secondary);
-  font: 400 11.5px/1.5 var(--font-ui);
+  font: 450 12px/1.4 var(--font-ui);
+}
+.hero-example-row > span {
+  padding-inline: 3px;
 }
 .hero-example-row button {
-  font: inherit;
-  font-weight: 500;
+  min-height: 32px;
+  padding: 4px 6px;
+  border-radius: 6px;
   color: var(--home-accent-text);
-  padding: 3px 2px;
+  font: inherit;
+  font-weight: 550;
   text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, var(--home-accent-text) 40%, transparent);
+  text-decoration-color: color-mix(in srgb, var(--home-accent-text) 44%, transparent);
   text-underline-offset: 3px;
 }
-@media (max-width: 600px) {
-  .hero-shortcuts {
-    gap: 11px;
-  }
+.hero-example-row button:is(:hover, :focus-visible) {
+  background: var(--accent);
+  text-decoration-color: currentColor;
+}
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
   .hero-methods .hero-method {
-    min-height: 40px;
-    font-size: 12px;
-    padding-inline: 10px;
+    transition: background-color 140ms var(--studio-ease-out), border-color 140ms var(--studio-ease-out);
   }
-  .hero-example-row {
-    font-size: 11px;
+  .hero-method-icon {
+    transition: transform 160ms var(--studio-ease-out);
+  }
+  .hero-method:hover .hero-method-icon {
+    transform: translateY(-1px);
+  }
+}
+@container (max-width: 615px) {
+  .hero-methods {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 480px) {
+  .hero-methods .hero-method {
+    padding-inline: 8px;
+    font-size: 12.5px;
+  }
+  .hero-method-icon {
+    inline-size: 26px;
+    block-size: 26px;
   }
 }

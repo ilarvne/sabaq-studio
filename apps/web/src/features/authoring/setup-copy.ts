@@ -1,5 +1,6 @@
 export const setupCopy = {
   en: {
+    createOutline:'Create outline',
     search:'Search templates', placeholder:'Search by name, topic or subject', results:(n:number) => `${n} ${n === 1 ? 'template' : 'templates'}`,
     topicExample:'Try a topic on the covers', audience:'Who will you teach?', time:'How long is the lesson?', visuals:'How should the slides use images?',
     audienceHint:'The audience guides the vocabulary and depth of explanation.', timeHint:'Set the teaching time or choose an exact slide count.', visualsHint:'Choose the balance between imagery and text.',
@@ -10,8 +11,10 @@ export const setupCopy = {
     includeQuiz:'Include a check question', omitQuiz:'Skip check questions', customQuiz:'Use my own question',
     ownImages:'Use my own images', uploadImage:'Upload a cover image (optional)', ownImageAlt:'Image description',
     ownImageLimit:'Choose a PNG, JPEG or WebP image up to 10 MB.', customImage:'Describe an image style', customImageHint:'e.g. Watercolour illustrations',
+    visualOptions: {auto:'Let the lesson guide each slide.', illustrations:'Place images beside editable text.', 'image-led':'Give images most of the slide.', none:'Use text, charts and diagrams.', own:'Add an existing image to the cover.', custom:'Set a style for new illustrations.'},
   },
   ru: {
+    createOutline:'Создать план',
     search:'Поиск шаблонов', placeholder:'По названию, теме или предмету', results:(n:number) => `${n} ${n === 1 ? 'шаблон' : n >= 2 && n <= 4 ? 'шаблона' : 'шаблонов'}`,
     topicExample:'Введите тему для обложек', audience:'Для кого этот урок?', time:'Сколько продлится урок?', visuals:'Как использовать изображения?',
     audienceHint:'От аудитории зависят словарь и глубина объяснений.', timeHint:'Укажите время занятия или точное число слайдов.', visualsHint:'Выберите соотношение изображений и текста.',
@@ -22,8 +25,10 @@ export const setupCopy = {
     includeQuiz:'Добавить контрольный вопрос', omitQuiz:'Без контрольных вопросов', customQuiz:'Ввести свой вопрос',
     ownImages:'Использовать свои изображения', uploadImage:'Загрузить изображение для обложки (необязательно)', ownImageAlt:'Описание изображения',
     ownImageLimit:'Выберите изображение PNG, JPEG или WebP до 10 МБ.', customImage:'Описать стиль изображений', customImageHint:'Например, акварельные иллюстрации',
+    visualOptions: {auto:'Подобрать оформление по теме.', illustrations:'Разместить изображения рядом с текстом.', 'image-led':'Отвести изображениям больше места.', none:'Использовать текст, графики и схемы.', own:'Добавить готовое изображение на обложку.', custom:'Задать стиль новых иллюстраций.'},
   },
   kk: {
+    createOutline:'Жоспар жасау',
     search:'Үлгілерді іздеу', placeholder:'Атауы, тақырыбы немесе пәні бойынша', results:(n:number) => `${n} үлгі`,
     topicExample:'Мұқабаға сабақ тақырыбын енгізіңіз', audience:'Сабақ кімге арналған?', time:'Сабақ қанша уақытқа созылады?', visuals:'Слайдтарда суреттер қалай қолданылсын?',
     audienceHint:'Оқушылардың деңгейіне сай сөздер мен түсіндіру тәсілі таңдалады.', timeHint:'Сабақ уақытын немесе слайдтың нақты санын белгілеңіз.', visualsHint:'Сурет пен мәтіннің арақатынасын таңдаңыз.',
@@ -34,5 +39,6 @@ export const setupCopy = {
     includeQuiz:'Бақылау сұрағын қосу', omitQuiz:'Бақылау сұрағын қоспау', customQuiz:'Өз сұрағымды енгізу',
     ownImages:'Өз суреттерімді қолдану', uploadImage:'Мұқаба суретін жүктеу (міндетті емес)', ownImageAlt:'Суреттің сипаттамасы',
     ownImageLimit:'10 МБ-қа дейінгі PNG, JPEG немесе WebP суретін таңдаңыз.', customImage:'Сурет стилін сипаттау', customImageHint:'Мысалы, акварельмен салынған суреттер',
+    visualOptions: {auto:'Тақырыпқа сай безендіру.', illustrations:'Суреттерді мәтіннің жанына қою.', 'image-led':'Слайдта суреттерге көбірек орын беру.', none:'Мәтін, график пен сызба қолдану.', own:'Дайын суретті мұқабаға қосу.', custom:'Жаңа иллюстрациялардың стилін белгілеу.'},
   },
 };

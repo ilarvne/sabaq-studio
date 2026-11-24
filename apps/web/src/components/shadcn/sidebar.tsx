@@ -153,6 +153,8 @@ function Sidebar({
   variant = "sidebar",
   collapsible = "offcanvas",
   mobileTitle = "Navigation",
+  onMobileClose,
+  mobileFinalFocus,
   className,
   children,
   dir,
@@ -162,6 +164,8 @@ function Sidebar({
   variant?: "sidebar" | "floating" | "inset"
   collapsible?: "offcanvas" | "icon" | "none"
   mobileTitle?: string
+  onMobileClose?: () => void
+  mobileFinalFocus?: React.ComponentProps<typeof SheetContent>["finalFocus"]
 }) {
   const { isMobile, state, openMobile, setOpenMobile } = useSidebar()
 
@@ -182,12 +186,14 @@ function Sidebar({
 
   if (isMobile) {
     return (
-      <Sheet open={openMobile} onOpenChange={setOpenMobile} {...props}>
+      <Sheet open={openMobile} onOpenChange={setOpenMobile}
+        onOpenChangeComplete={open => { if (!open) onMobileClose?.() }} {...props}>
         <SheetContent
           dir={dir}
           data-sidebar="sidebar"
           data-slot="sidebar"
           data-mobile="true"
+          finalFocus={mobileFinalFocus}
           className="w-(--sidebar-width) bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
           style={
             {

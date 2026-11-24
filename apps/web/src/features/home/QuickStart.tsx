@@ -67,26 +67,27 @@ export function QuickStart({
   return (
     <div className="hero-shortcuts">
       <section aria-label={c.title} className="hero-methods">
-        <a href="#/templates" className={buttonVariants({ variant: 'outline', className: 'hero-method' })}>
-          <SquaresFourIcon />
-          {c.templates}
+        <a href="#/templates" data-tone="amber" className={buttonVariants({ variant: 'outline', className: 'hero-method' })}>
+          <span className="hero-method-icon"><SquaresFourIcon aria-hidden="true" weight="duotone" /></span>
+          <span>{c.templates}</span>
         </a>
         {(
           [
-            { mode: 'file', Icon: FileTextIcon },
-            { mode: 'source', Icon: BooksIcon },
-            { mode: 'pptx', Icon: PresentationChartIcon },
+            { mode: 'file', Icon: FileTextIcon, tone: 'teal' },
+            { mode: 'source', Icon: BooksIcon, tone: 'violet' },
+            { mode: 'pptx', Icon: PresentationChartIcon, tone: 'rose' },
           ] as const
-        ).map(({ mode, Icon }) => (
+        ).map(({ mode, Icon, tone }) => (
           <Button
             type="button"
             key={mode}
             variant="outline"
             className="hero-method"
+            data-tone={tone}
             onClick={() => onStart(mode)}
           >
-            <Icon />
-            {c[mode]}
+            <span className="hero-method-icon"><Icon aria-hidden="true" weight="duotone" /></span>
+            <span>{c[mode]}</span>
           </Button>
         ))}
       </section>

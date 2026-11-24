@@ -1,0 +1,57 @@
+.saved-lesson-plan[data-slot='dialog-popup'] { max-width: 40rem; max-height: min(78dvh, 44rem); }
+.saved-lesson-plan [data-slot='dialog-header'] { padding-inline-end: 3.25rem; }
+.saved-lesson-plan [data-slot='dialog-description'] { overflow-wrap: anywhere; }
+.saved-lesson-plan-panel { padding-top: 0; }
+.saved-lesson-plan-count {
+  margin: 0 0 6px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.saved-lesson-plan-items { list-style: none; margin: 0; padding: 0; }
+.saved-lesson-plan-item {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 12px;
+  padding-block: 14px;
+  border-block-start: 1px solid var(--border);
+}
+.saved-lesson-plan-index {
+  padding-block-start: 2px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.saved-lesson-plan-copy { min-width: 0; overflow-wrap: anywhere; }
+.saved-lesson-plan-copy h3 { margin: 0; font-size: 15px; font-weight: 650; line-height: 1.4; }
+.saved-lesson-plan-section {
+  margin: 0 0 4px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 600;
+}
+.saved-lesson-plan-summary {
+  margin: 4px 0 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-line;
+}
+.saved-lesson-plan-layout {
+  margin: 6px 0 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.saved-lesson-plan-layout span { margin-inline-end: 4px; font-weight: 600; }
+.saved-lesson-plan details { margin-top: 6px; }
+.saved-lesson-plan summary { width: fit-content; cursor: pointer; color: var(--muted-foreground); font-size: 12px; }
+.saved-lesson-plan summary:focus-visible { border-radius: 3px; outline: 2px solid var(--ring); outline-offset: 3px; }
+.saved-lesson-plan dl { display: grid; gap: 8px; margin: 7px 0 0; font-size: 13px; line-height: 1.5; }
+.saved-lesson-plan dt { font-size: 12px; font-weight: 600; }
+.saved-lesson-plan dd { margin: 2px 0 0; color: var(--muted-foreground); white-space: pre-line; }
+@media (max-width: 639px) {
+  .saved-lesson-plan[data-slot='dialog-popup'] { max-width: none; max-height: calc(100dvh - 3rem); }
+  .saved-lesson-plan [data-slot='dialog-header'], .saved-lesson-plan-panel { padding-inline-start: 16px; }
+  .saved-lesson-plan-panel { padding-inline-end: 16px; }
+  .saved-lesson-plan-item { grid-template-columns: 20px minmax(0, 1fr); gap: 9px; }
+}

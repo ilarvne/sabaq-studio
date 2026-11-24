@@ -1,16 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowRightIcon, ArrowCounterClockwiseIcon, CardsIcon, CircleNotchIcon, ClockIcon, FileTextIcon, GlobeIcon, PaintBrushIcon, PencilSimpleIcon, PlusIcon, PresentationChartIcon, WarningCircleIcon } from '@phosphor-icons/react';
+import { ArrowRightIcon, ArrowCounterClockwiseIcon, ClockIcon, FileTextIcon, GlobeIcon, PaintBrushIcon, PlusIcon, PresentationChartIcon, WarningCircleIcon } from '@phosphor-icons/react';
 import { formatSpeechTime, speechSeconds } from '@sabaq/lesson/speech-time';
 import { spokenNarration } from '@sabaq/lesson/narration';
 import { themeReasonText } from '@sabaq/lesson/themes';
 import { SlideCanvas } from '@sabaq/slide-renderer/canvas';
 import { maxLessonSlides, minGeneratedSlides, type Deck, type EditOp, type Locale, type OutlineItem } from '@sabaq/lesson/types';
 import { Button } from '@/components/shadcn/button';
-import { Skeleton } from '@/components/shadcn/skeleton';
 import { Textarea } from '@/components/shadcn/textarea';
 import { LanguageFlag } from '@/components/LanguageFlag';
 import { request } from '@/lib/api';
 import { OutlineActionsMenu } from './OutlineSlideControls';
+import { slideLayoutNames } from '@/slide-layout-copy';
+import { planCopy } from './outline-copy';
 import { languages, words } from '@/copy';
 import { ThemePicker } from '@/features/editor/ThemePicker';
 import { ImageStylePicker } from '@/features/editor/ImageStylePicker';
@@ -45,15 +46,6 @@ const copy = {
     undo:'Жоспар өзгерісін болдырмау', add:'Слайд қосу', untitled:'Жаңа слайд', resume:'Жасауды жалғастыру', progress:'Жасалу барысы', stopped:'Жасау тоқтатылды', status:{ ready:'Дайын', generating:'Жасалуда', pending:'Кезекте', failed:'Қате', cancelled:'Тоқтатылды' } },
 };
 
-const russianSlideCount = new Intl.PluralRules('ru');
-const russianSlideForms: Partial<Record<Intl.LDMLPluralRule,string>> = {one:'слайд',few:'слайда'};
-const planCopy = {
-  en:{visual:'Image description',narration:'Draft narration',details:'Slide details',own:'Own images',check:'Check question',slides:(count:number)=>`${count} ${count===1?'slide':'slides'}`},
-  ru:{visual:'Описание изображения',narration:'Черновик озвучивания',details:'Детали слайда',own:'Свои изображения',check:'Контрольный вопрос',
-    slides:(count:number)=>`${count} ${russianSlideForms[russianSlideCount.select(count)] ?? 'слайдов'}`},
-  kk:{visual:'Суреттің сипаттамасы',narration:'Баяндау нобайы',details:'Слайд мәліметтері',own:'Өз суреттері',check:'Бақылау сұрағы',slides:(count:number)=>`${count} слайд`},
-};
-
 function ProjectBrief({deck, locale}: {deck: Deck; locale: Locale}) {
   const c=copy[locale];
   return <section className="wb-panel wb-brief">
@@ -67,8 +59,8 @@ function ProjectBrief({deck, locale}: {deck: Deck; locale: Locale}) {
   </section>;
 }
 
-function Appearance({deck, locale, onEdit}: {deck:Deck; locale: Locale; onEdit:(op:EditOp)=>void}) {
-  const opening=deck.outline[0];
+function Appearance({deck, locale, complete, onEdit}: {deck:Deck; locale: Locale; complete:boolean; onEdit:(op:EditOp)=>void}) {
+  const opening=complete ? deck.outline[0] : undefined;
   const preview=deck.slides.find(slide=>slide.status==='ready') ?? {
     id:'outline-cover', status:'ready' as const, layout:'cover' as const, lessonPart:'',
     title:opening?.title || deck.topic, body:opening?.summary || '', notes:'', version:0,
@@ -99,6 +91,8 @@ export function Outline({deck,locale,busy,onEdit,onGenerate,onRetry}:OutlineProp
   const countHelp = {en:'Add slides to reach the 3-slide minimum.',ru:'Добавьте слайды: в плане должно быть не менее 3.',kk:'Жоспарда кемінде 3 слайд болуы керек.'}[locale];
   const complete=deck.outlineStatus==='complete' || (!deck.outlineStatus && count>0);
   const failed=deck.outlineStatus==='failed';
+  const preparing=!complete && !failed;
+  const placeholderCount=preparing ? Math.max(0, 3-count) : 0;
   const rate=deck.speechProfile?.language===deck.language ? deck.speechProfile.wordsPerMinute : undefined;
   const times=items.map(item=>{
     const spoken=spokenNarration(item.narrationDraft || item.summary,deck.language);
@@ -122,14 +116,17 @@ export function Outline({deck,locale,busy,onEdit,onGenerate,onRetry}:OutlineProp
   return <main className="deck-workbench wb-outline">
     <header className="wb-heading"><div><h1>{t.outline}</h1><p>{t.outlineIntro}</p></div><Button variant="outline" size="sm" className="wb-inspector-toggle" aria-controls="wb-style-details" aria-expanded={inspectorOpen} onClick={()=>setInspectorOpen(!inspectorOpen)}><PaintBrushIcon/>{c.appearance}</Button></header>
     <div className="wb-layout"><section className="wb-sequence" aria-labelledby="wb-sequence-heading">
-      <div className="wb-section-heading"><h2 id="wb-sequence-heading">{t.slideSequence}</h2><span className="wb-count">{count}</span>
-        {canUndo && <Button className="wb-undo" variant="ghost" size="sm" onClick={undo}><ArrowCounterClockwiseIcon/>{c.undo}</Button>}
+      <div className="wb-section-heading">
+        <h2 id="wb-sequence-heading">{t.slideSequence}</h2>
+        {complete && count>0 && <span className="wb-count">{count}</span>}
+        {preparing && <p className="wb-preparing" role="status">{t.outlineLoading}</p>}
+        {complete && canUndo && <Button className="wb-undo" variant="ghost" size="sm" onClick={undo}><ArrowCounterClockwiseIcon/>{c.undo}</Button>}
       </div>
-      {!complete && <div className="wb-feedback" role={failed?'alert':'status'}>
-        {failed ? <WarningCircleIcon aria-hidden/> : <CircleNotchIcon className="wb-spinner" aria-hidden/>}<p>{failed ? deck.outlineModerationNotice || t.failedOutline : t.outlineLoading}</p>
-        {failed && <Button variant="outline" size="sm" disabled={busy} onClick={onRetry}>{t.retry}</Button>}
+      {failed && <div className="wb-feedback" role="alert">
+        <WarningCircleIcon aria-hidden/><p>{deck.outlineModerationNotice || t.failedOutline}</p>
+        <Button variant="outline" size="sm" disabled={busy} onClick={onRetry}>{t.retry}</Button>
       </div>}
-      <ol className="wb-outline-list">{items.map((item,index)=>
+      {(count>0 || preparing) && <ol className="wb-outline-list" aria-busy={preparing}>{items.map((item,index)=>
         <li className="wb-outline-step" key={item.id}>
           {sections[index] && (index === 0 || sections[index] !== sections[index - 1]) &&
             <h3 className="wb-lesson-section" lang={deck.language}>{sections[index]}</h3>}
@@ -143,6 +140,7 @@ export function Outline({deck,locale,busy,onEdit,onGenerate,onRetry}:OutlineProp
             <Textarea className="wb-outline-summary" lang={deck.language} rows={1} aria-label={t.outlineSummary+' '+(index+1)} maxLength={600} value={item.summary}
               onChange={event=>update(index,{summary:event.target.value})}/>
             <div className="wb-slide-meta">
+              <span><span className="sr-only">{fields.layout} </span>{slideLayoutNames[locale][item.layout]}</span>
               {item.assessment && <span>{fields.check}</span>}
               <span>{c.spoken} · {formatSpeechTime(times[index],locale)}</span>
             </div>
@@ -152,21 +150,42 @@ export function Outline({deck,locale,busy,onEdit,onGenerate,onRetry}:OutlineProp
                 <Textarea rows={2} lang={deck.language} maxLength={400} value={item.visualDescription??''}
                   onChange={event=>update(index,{visualDescription:event.target.value})}/>
               </label>}
+              {item.imageScenes?.map((description,scene)=><label key={scene}>{fields.scene} {scene+1}
+                <Textarea key={description} rows={2} lang={deck.language} maxLength={400} defaultValue={description}
+                  onBlur={event=>{
+                    const next=event.currentTarget.value.trim();
+                    const imageScenes=item.imageScenes!;
+                    if (!next || imageScenes.some((other,position)=>position!==scene && other.toLowerCase()===next.toLowerCase())) {
+                      event.currentTarget.value=description;
+                      return;
+                    }
+                    if (next!==description) update(index,{imageScenes:imageScenes.map((other,position)=>position===scene ? next : other)});
+                  }}/>
+              </label>)}
               <label>{fields.narration}<Textarea rows={2} lang={deck.language} maxLength={2500} value={item.narrationDraft??''}
                 onChange={event=>update(index,{narrationDraft:event.target.value})}/></label>
             </details>
           </div>
           <OutlineActionsMenu locale={locale} language={deck.language} items={items} index={index} disabled={busy||!complete} onChange={save}/>
           </div>
-        </li>)}</ol>
-      {!complete && !failed && <div className="wb-outline-placeholder" aria-hidden="true"><Skeleton/><div><Skeleton/><Skeleton/></div></div>}
+        </li>)}
+        {Array.from({length:placeholderCount}, (_,index)=>(
+          <li className="wb-outline-placeholder" aria-hidden="true" key={`pending-${count+index}`}>
+            <span className="wb-placeholder-index"/><span className="wb-placeholder-copy"><span/><span/><span/></span>
+          </li>
+        ))}
+      </ol>}
       {complete && <Button className="wb-add" variant="outline" disabled={busy||count>=maxLessonSlides} onClick={()=>{const id=crypto.randomUUID();addedTitle.current=id;save([...items,{id,title:c.untitled,summary:'',layout:'body'}]);}}><PlusIcon/>{c.add}</Button>}
+      {complete && <footer className="wb-outline-bar">
+        <div className="wb-bar-meta">
+          <span>{fields.slides(count)}</span>
+          {seconds>0 && <span><ClockIcon aria-hidden/>{formatSpeechTime(seconds,locale)}</span>}
+        </div>
+        {needsMoreSlides && <p id="wb-count-help" className="wb-count-help" role="status">{countHelp}</p>}
+        <Button className="wb-primary" aria-describedby={needsMoreSlides?'wb-count-help':undefined} disabled={busy||needsMoreSlides} onClick={onGenerate}>{t.generate}<ArrowRightIcon aria-hidden/></Button>
+      </footer>}
     </section>
-    <aside className="wb-inspector" id="wb-style-details" data-open={inspectorOpen}><Appearance deck={deck} locale={locale} onEdit={onEdit}/><ProjectBrief deck={deck} locale={locale}/></aside></div>
-    <footer className="wb-outline-bar"><div className="wb-bar-meta"><CardsIcon aria-hidden/><span>{fields.slides(count)}</span><i/><ClockIcon aria-hidden/><span>{formatSpeechTime(seconds,locale)}</span></div>
-      {needsMoreSlides && <p id="wb-count-help" className="wb-count-help" role="status">{countHelp}</p>}
-      <Button className="wb-primary" aria-describedby={needsMoreSlides?'wb-count-help':undefined} disabled={!complete||busy||needsMoreSlides} onClick={onGenerate}><PencilSimpleIcon/>{t.generate}<ArrowRightIcon/></Button>
-    </footer>
+    <aside className="wb-inspector" id="wb-style-details" data-open={inspectorOpen}><Appearance deck={deck} locale={locale} complete={complete} onEdit={onEdit}/><ProjectBrief deck={deck} locale={locale}/></aside></div>
   </main>;
 }
 

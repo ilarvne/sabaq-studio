@@ -1,0 +1,15 @@
+:root {
+  --workspace-blue-ink: #2358bc;
+  --workspace-violet-ink: #6546b4;
+  --workspace-teal-ink: #096c62;
+  --workspace-amber-ink: #865114;
+  --workspace-rose-ink: #9d3b5e;
+}
+
+:root[data-appearance='dark'], .dark {
+  --workspace-blue-ink: #a5c8ff;
+  --workspace-violet-ink: #cabaff;
+  --workspace-teal-ink: #86ddc7;
+  --workspace-amber-ink: #f0c480;
+  --workspace-rose-ink: #efa9bf;
+}

@@ -4,22 +4,12 @@ import {
   ArrowRightIcon,
   MagnifyingGlassIcon,
   PencilSimpleIcon,
-  UsersThreeIcon,
-  GraduationCapIcon,
-  ImageIcon,
-  TextTIcon,
-  QuestionIcon,
   MinusCircleIcon,
-  TimerIcon,
-  ImagesSquareIcon,
-  ListChecksIcon,
-  BookOpenIcon,
   BooksIcon,
   CaretDownIcon,
   CaretLeftIcon,
   CaretRightIcon,
   CheckIcon,
-  EyeIcon,
   FileTextIcon,
   HardDrivesIcon,
   PlusIcon,
@@ -30,12 +20,13 @@ import {
   StackIcon,
   UploadSimpleIcon,
 } from '@phosphor-icons/react';
-import { maxLessonSlides, minGeneratedSlides, type CreateInput, type Locale, type PowerPointStyle, type Provider, type Slide } from '@sabaq/lesson/types';
+import { maxLessonSlides, minGeneratedSlides, type CreateInput, type ImageMode, type Locale, type PowerPointStyle, type Provider, type Slide } from '@sabaq/lesson/types';
 import { formatTimeUnit } from '@sabaq/lesson/speech-time';
 import { makeFixtureDeck } from '@sabaq/lesson/fixture';
 import { isTemplate, lessonTemplates, matchingTemplates, templatePlan, templateSubjects, type TemplateId } from '@sabaq/lesson/lesson-templates';
 import { OptionSelect } from '@/components/OptionSelect';
 import { LanguageFlag } from '@/components/LanguageFlag';
+import { AssistantResearchMenu, isWebResearchMode, type WebResearchMode } from '@/features/assistant/AssistantResearch';
 import { SlideCanvas } from '@sabaq/slide-renderer/canvas';
 import { Dialog, DialogDescription, DialogHeader, DialogPopup, DialogTitle } from '@/components/coss/dialog';
 import { Button } from '@/components/coss/button';
@@ -54,6 +45,7 @@ import { sourceCopy } from '@/features/sources/source-copy';
 import { sourceFileAccept, sourceFilePath, uploadSourceFile } from '@/features/sources/source-api';
 import { OrganizationTemplates } from '@/features/organization/Organization';
 import { CatalogCover } from './CatalogCover';
+import { ImageLayoutSample } from './ImageLayoutSample';
 import { setupCopy } from './setup-copy';
 import './start.css';
 
@@ -61,10 +53,15 @@ export type Template = TemplateId;
 export type StartMode = 'topic' | 'file' | 'source' | 'pptx';
 type Answers = NonNullable<CreateInput['answers']>;
 const questions = ['level', 'duration', 'image', 'quiz'] as const;
+type SetupQuestion = typeof questions[number];
+const imageSamples: Partial<Record<string, ImageMode>> = {
+  '': 'auto', illustrations: 'illustrated', 'image-led': 'image-led', none: 'none',
+};
 const languageOptions = Object.entries(languages).map(([id, label]) => ({ value: id as Locale, label }));
 const copy = {
   en: {
     research: 'Research with public sources', publicQuery: 'Public search query', savedSource: 'Saved source',
+    researchNote: 'Builds slides from public sources and includes links in the speaker notes.',
     settings: 'Lesson settings',
     brief: 'Lesson brief',
     sample: 'Sample slides',
@@ -77,6 +74,7 @@ const copy = {
   },
   ru: {
     research: 'Исследовать открытые источники', publicQuery: 'Публичный поисковый запрос', savedSource: 'Сохранённый источник',
+    researchNote: 'Слайды создаются по открытым источникам со ссылками в заметках докладчика.',
     settings: 'Параметры урока',
     brief: 'Основа урока',
     sample: 'Примеры слайдов',
@@ -89,6 +87,7 @@ const copy = {
   },
   kk: {
     research: 'Ашық дереккөздерді зерттеу', publicQuery: 'Жалпыға ашық іздеу сұрауы', savedSource: 'Сақталған дереккөз',
+    researchNote: 'Слайдтар ашық дереккөздерге сүйенеді, сілтемелері баяндамашы жазбаларында көрсетіледі.',
     settings: 'Сабақ параметрлері',
     brief: 'Сабақ негізі',
     sample: 'Слайд үлгілері',
@@ -102,9 +101,9 @@ const copy = {
 };
 
 const catalogWords = {
-  en:{use:'Use',subject:'Subject',grade:'Grade',allGrades:'All grades',allSubjects:'All subjects',topic:'Preview with your lesson topic',empty:'No templates match your search and filters.',clear:'Clear filters'},
-  ru:{use:'Использовать',subject:'Предмет',grade:'Класс',allGrades:'Все классы',allSubjects:'Все предметы',topic:'Предпросмотр на теме вашего урока',empty:'По этому запросу и фильтрам шаблонов нет.',clear:'Сбросить фильтры'},
-  kk:{use:'Қолдану',subject:'Пән',grade:'Сынып',allGrades:'Барлық сыныптар',allSubjects:'Барлық пәндер',topic:'Өз сабағыңыздың тақырыбымен көру',empty:'Сұрау мен сүзгілерге сәйкес үлгі табылмады.',clear:'Сүзгілерді тазалау'},
+  en:{use:'Use',subject:'Subject',grade:'Grade',allGrades:'All grades',allSubjects:'All subjects',topic:'Preview with your lesson topic',topicPlaceholder:'Try your lesson topic',empty:'No templates match your search and filters.',clear:'Clear filters'},
+  ru:{use:'Использовать',subject:'Предмет',grade:'Класс',allGrades:'Все классы',allSubjects:'Все предметы',topic:'Предпросмотр на теме вашего урока',topicPlaceholder:'Тема для обложек',empty:'По этому запросу и фильтрам шаблонов нет.',clear:'Сбросить фильтры'},
+  kk:{use:'Қолдану',subject:'Пән',grade:'Сынып',allGrades:'Барлық сыныптар',allSubjects:'Барлық пәндер',topic:'Өз сабағыңыздың тақырыбымен көру',topicPlaceholder:'Мұқабаға арналған тақырып',empty:'Сұрау мен сүзгілерге сәйкес үлгі табылмады.',clear:'Сүзгілерді тазалау'},
 };
 
 function sampleDeck(locale:Locale,id:Template,customTopic:string) {
@@ -127,9 +126,11 @@ export function Templates({locale,onChoose,organization=false}:{organization?:bo
   const [grade,setGrade]=useState('all');
   const [topic,setTopic]=useState(()=>readDraft(locale).topic);
   const [preview,setPreview]=useState<Template>();
+  const searchInput=useRef<HTMLInputElement>(null);
   const previewTrigger=useRef<HTMLButtonElement>(null);
   const [index,setIndex]=useState(0);
   const query = search.trim().toLocaleLowerCase(locale);
+  const hasFilters = Boolean(query) || filter !== 'all' || grade !== 'all';
   const visible=matchingTemplates(filter==='all'?undefined:filter,grade==='all'?undefined:Number(grade)).filter(id => {
     const preset = lessonTemplates[id];
     return !query || [preset.name[locale], preset.topic[locale], templateSubjects[preset.subject][locale]].some(text => text.toLocaleLowerCase(locale).includes(query));
@@ -140,6 +141,12 @@ export function Templates({locale,onChoose,organization=false}:{organization?:bo
   function choose(id:Template) {
     onChoose(id,topic.trim() || lessonTemplates[id].topic[locale]);
   }
+  function clearFilters() {
+    setSearch('');
+    setFilter('all');
+    setGrade('all');
+    searchInput.current?.focus();
+  }
   return (
     <div className="creation-page templates-page">
       <header className="creation-heading catalog-heading">
@@ -147,36 +154,40 @@ export function Templates({locale,onChoose,organization=false}:{organization?:bo
       </header>
       {organization && <OrganizationTemplates locale={locale}/>}
       <div className="template-filters" role="group" aria-label={s.templateFilter}>
-        <label className="catalog-search-label"><span className="catalog-search-caption">{ui.search}</span>
-          <span className="template-search"><MagnifyingGlassIcon aria-hidden/>
-            <input type="search" placeholder={ui.placeholder} value={search} onChange={event=>setSearch(event.target.value)}/>
-          </span>
-        </label>
-        <label>{labels.subject}<OptionSelect label={labels.subject} value={filter} options={subjects} onChange={setFilter}/></label>
-        <label>{labels.grade}<OptionSelect label={labels.grade} value={grade} options={grades} onChange={setGrade}/></label>
-        <label className="catalog-topic-label">{labels.topic}
-          <span className="catalog-topic-input"><PencilSimpleIcon aria-hidden/><Input placeholder={ui.topicExample} maxLength={500} value={topic} onChange={event=>setTopic(event.target.value)}/></span>
-        </label>
+        <div className="template-search">
+          <MagnifyingGlassIcon aria-hidden />
+          <Input ref={searchInput} size="lg" type="search" aria-label={ui.search} placeholder={ui.search} value={search} onChange={event=>setSearch(event.target.value)} />
+        </div>
+        <OptionSelect label={labels.subject} value={filter} options={subjects} onChange={setFilter} />
+        <OptionSelect label={labels.grade} value={grade} options={grades} onChange={setGrade} />
+        <div className="catalog-topic-input">
+          <PencilSimpleIcon aria-hidden />
+          <Input size="lg" aria-label={labels.topic} placeholder={labels.topicPlaceholder} maxLength={500} value={topic} onChange={event=>setTopic(event.target.value)} />
+        </div>
       </div>
-      <p className="catalog-results" role="status">{ui.results(visible.length)}</p>
+      <div className="catalog-results">
+        <p role="status">{ui.results(visible.length)}</p>
+        {hasFilters && visible.length > 0 && <Button variant="link" size="xs" onClick={clearFilters}>{labels.clear}</Button>}
+      </div>
       {!visible.length && <div className="template-empty"><MagnifyingGlassIcon aria-hidden/><p>{labels.empty}</p>
-        <Button variant="outline" onClick={()=>{setFilter('all');setGrade('all');setSearch('');}}>{labels.clear}</Button></div>}
+        <Button variant="outline" onClick={clearFilters}>{labels.clear}</Button></div>}
       <div className="template-shelf">
         {visible.map(id => {
           const meta=lessonTemplates[id];
           return <article key={id} className="template-sheet">
             <button type="button" className="template-preview-trigger"
+              aria-label={`${t.preview} · ${meta.name[locale]}`} title={t.preview}
               onClick={event=>{previewTrigger.current=event.currentTarget;setPreview(id);setIndex(0);}}>
               <CatalogCover id={id} locale={locale} topic={topic}/>
-              <span className="catalog-preview-label"><EyeIcon aria-hidden/>{t.preview}</span>
-              <span className="sr-only"> · {meta.name[locale]}</span>
             </button>
             <div className="template-sheet-copy">
               <h2>{meta.name[locale]}</h2>
-              <span className="template-category">{templateSubjects[meta.subject][locale]} · {labels.grade} {meta.min}–{meta.max}</span>
-              <Button type="button" className="template-choose" variant="outline" size="icon-sm" aria-label={t.chooseTemplate+' · '+meta.name[locale]} title={t.chooseTemplate} onClick={() => choose(id)}>
-                <span>{labels.use}</span><ArrowRightIcon aria-hidden/>
-              </Button>
+              <div className="template-sheet-meta">
+                <span className="template-category">{templateSubjects[meta.subject][locale]} · {labels.grade} {meta.min}–{meta.max}</span>
+                <Button type="button" className="template-choose" variant="ghost" size="sm" aria-label={t.chooseTemplate+' · '+meta.name[locale]} onClick={() => choose(id)}>
+                  {labels.use}<ArrowRightIcon aria-hidden />
+                </Button>
+              </div>
             </div>
           </article>;
         })}
@@ -257,10 +268,11 @@ type Draft = {
   sourceFiles?: SourceFile[];
   uploadedSource?: SourceFile;
   researchQuery?: string;
+  webResearch?: WebResearchMode;
   review: boolean;
   step: number;
   answers: Answers;
-  customAnswers?: Partial<Record<typeof questions[number],boolean>>;
+  customAnswers?: Partial<Record<SetupQuestion, boolean>>;
   slideCount?: string;
   powerPointStyle?: PowerPointStyle;
   template?: Template;
@@ -307,6 +319,7 @@ function readDraft(locale: Locale, template?: Template): Draft {
           ...saved,
           creationId:typeof saved.creationId==="string" ? saved.creationId : initial.creationId,
           template: isTemplate(saved.template) ? saved.template : undefined,
+          webResearch: saved.mode === 'topic' && isWebResearchMode(saved.webResearch) ? saved.webResearch : undefined,
         };
       }
     }
@@ -321,6 +334,7 @@ function readDraft(locale: Locale, template?: Template): Draft {
       ...draft,
       template,
       step: -1,
+      webResearch: undefined,
       topic: !draft.topic.trim() || wasTemplateTitle ? lessonTemplates[template].topic[locale] : draft.topic,
     };
   }
@@ -335,6 +349,7 @@ export function Start({
   alem,
   localAuthoring,
   researchTopics,
+  assistantWebResearch = false,
   onCreate,
   onBack,
   onTemplates,
@@ -347,6 +362,7 @@ export function Start({
   alem: boolean;
   localAuthoring: boolean;
   researchTopics: string[];
+  assistantWebResearch?: boolean;
   onCreate: (input: CreateInput) => Promise<void>;
   onBack: () => void;
   onTemplates: () => void;
@@ -357,8 +373,10 @@ export function Start({
   const { ocr } = useMediaCapabilities();
   const [draft,setDraft]=useState(()=>{
     const saved=readDraft(locale,template);
-    if (initialMode) return {...saved, mode:initialMode, step:-1};
-    return template && catalogTopic!==undefined ? {...saved,template,topic:catalogTopic,mode:'topic' as const,step:0,researchQuery:undefined} : saved;
+    if (initialMode) return {...saved, mode:initialMode, step:-1, webResearch:initialMode === 'topic' ? saved.webResearch : undefined};
+    return template && catalogTopic!==undefined
+      ? {...saved,template,topic:catalogTopic,mode:'topic' as const,step:0,researchQuery:undefined,webResearch:undefined}
+      : saved;
   });
   const [busy, setBusy] = useState(false),
     [error, setError] = useState('');
@@ -396,7 +414,7 @@ export function Start({
   const finishLock = useRef(false),
     fileRequest = useRef(0),
     fileExtraction = useRef<AbortController | undefined>(undefined),
-    questionHeading = useRef<HTMLLegendElement>(null);
+    setupHeading = useRef<HTMLHeadingElement>(null);
   useEffect(() => () => fileExtraction.current?.abort(), []);
   const topicField = useRef<HTMLTextAreaElement>(null);
   const { mode, language, topic, review, step, source, fileName, answers } = draft;
@@ -409,7 +427,9 @@ export function Start({
     }
   }, [draft]);
   useEffect(() => {
-    if (step >= 0) questionHeading.current?.focus({ preventScroll: true });
+    if (step < 0) return;
+    setupHeading.current?.focus({ preventScroll: true });
+    window.scrollTo({ top: 0, behavior: 'instant' });
   }, [step]);
   const sample = useMemo(() => makeFixtureDeck(language), [language]);
   const selectedFiles = mode==='source' ? draft.sourceFiles ?? [] : mode==='file' && draft.uploadedSource ? [draft.uploadedSource] : [];
@@ -426,15 +446,23 @@ export function Start({
     void request<{id: string; name: string}[]>('/sources').then(items => { if (active) setSavedSources(items); }).catch(() => { if (active) setError(t.error); });
     return () => { active = false; };
   }, [mode, t.error]);
-  const researchQuery = mode === 'topic' && researchTopics.includes(draft.researchQuery ?? '') ? draft.researchQuery : undefined;
+  const offersWebResearch = mode === 'topic' && assistantWebResearch;
+  const webResearch = offersWebResearch && alem ? draft.webResearch : undefined;
+  const researchQuery = mode === 'topic' && !offersWebResearch && researchTopics.includes(draft.researchQuery ?? '')
+    ? draft.researchQuery : undefined;
+  const usingPublicSources = Boolean(webResearch || researchQuery);
   const canUseAlem = alem && mode === 'topic' && !researchQuery;
-  const canUseLocal = localAuthoring && !researchQuery && mode !== 'pptx';
-  const provider: Provider = draft.provider === 'fixture' ? 'fixture' : draft.provider === 'alem' && canUseAlem ? 'alem' :
-    canUseLocal ? 'local' : canUseAlem ? 'alem' : 'fixture';
+  const canUseLocal = localAuthoring && !usingPublicSources && mode !== 'pptx';
+  const webControls = offersWebResearch && <AssistantResearchMenu locale={locale} mode={webResearch}
+    available modelAvailable={alem} disabled={busy} surface="authoring"
+    onModeChange={selection => patch({webResearch:selection, researchQuery:undefined})}/>;
+  const provider: Provider = webResearch ? 'alem'
+    : draft.provider === 'fixture' ? 'fixture'
+    : draft.provider === 'local' && canUseLocal ? 'local'
+    : canUseAlem ? 'alem' : canUseLocal ? 'local' : 'fixture';
   const localName = {en:'Local AI',ru:'Локальный ИИ',kk:'Жергілікті ЖИ'}[locale];
   const localNote = {en:'Creates slides on this computer using the lesson and its source passages.',ru:'Создаёт слайды на этом компьютере по материалам урока и фрагментам источника.',kk:'Сабақ материалдары мен дереккөз үзінділерінен осы компьютерде слайдтар жасайды.'}[locale];
-  const question = questions[step];
-  function recordStart(answer?:typeof question) {
+  function recordStart(answer?:SetupQuestion) {
     void request('/usage/creation',{method:'POST',body:{id:draft.creationId,language,question:answer}}).catch(()=>undefined);
   }
   useEffect(()=>{recordStart();},[draft.creationId]);
@@ -448,25 +476,19 @@ export function Start({
     image: [
       [t.usePictures, 'illustrations'],
       [ui.imageLed, 'image-led'],
-      [ui.ownImages, 'own'],
       [t.noPictures, 'none'],
+      [ui.ownImages, 'own'],
     ],
     quiz: [[ui.includeQuiz,'include'],[ui.omitQuiz,'omit']],
   };
-  const activeAnswer = question === 'duration' && draft.slideCount !== undefined ? 'exact' :
-    draft.customAnswers?.[question] ? 'custom' : answers[question] ?? '';
   const questionTitles = {level:ui.audience, duration:ui.time, image:ui.visuals, quiz:ui.quiz};
   const questionHints = {level:ui.audienceHint, duration:ui.timeHint, image:ui.visualsHint, quiz:ui.quizHint};
-  const stepLabels = {level:ui.audienceShort, duration:ui.timeShort, image:ui.visualsShort, quiz:ui.quizShort};
-  const answerIcons: Record<string, typeof ListChecksIcon> = {
-    '': ListChecksIcon, middle: BookOpenIcon, secondary: GraduationCapIcon, adult: UsersThreeIcon,
-    illustrations: ImageIcon, 'image-led': ImagesSquareIcon, own: UploadSimpleIcon, none: TextTIcon,
-    include: QuestionIcon, omit: MinusCircleIcon, custom: PencilSimpleIcon, exact: StackIcon,
-  };
   const customLabel = {level:ui.customLevel, duration:ui.customTime, image:ui.customImage, quiz:ui.customQuiz};
+  const visualDescriptions: Record<string, string> = { ...ui.visualOptions, '': ui.visualOptions.auto };
   const customField = {level:'level', duration:'duration', image:'imageInstruction', quiz:'quizInstruction'} as const;
   const customPlaceholder = {level:ui.customLevelHint, duration:'30', image:ui.customImageHint, quiz:undefined};
-  function selectAnswer(value:string) {
+  function selectAnswer(question: SetupQuestion, value: string) {
+    recordStart(question);
     const custom = value === 'custom';
     const next: Answers = { ...answers };
     if (question === 'quiz') {
@@ -484,13 +506,6 @@ export function Start({
       ...(question==='duration' && {slideCount:value==='exact' ? draft.slideCount ?? '' : undefined}),
       answers:next,
     });
-  }
-  function answerText(key:typeof questions[number]) {
-    if (key === 'duration' && draft.slideCount) return `${draft.slideCount} · ${ui.customSlidesHint}`;
-    if (key === 'duration' && answers.duration && Number.isFinite(Number(answers.duration)))
-      return formatTimeUnit(Number(answers.duration),locale,'minute');
-    if (draft.customAnswers?.[key] && answers[customField[key]]) return answers[customField[key]];
-    return choices[key].find(([,value]) => value === answers[key])?.[0] || answers[key] || t.auto;
   }
   const languagePicker = <div className="creation-language">
     <Label id="lesson-language-label" htmlFor="lesson-language">{t.lessonLanguage}</Label>
@@ -535,6 +550,7 @@ export function Start({
         template: blank ? 'blank' : draft.template,
         answers:attachment ? {...answers,ownImage:attachment} : answers,
         ...(!blank && researchQuery ? { researchQuery } : {}),
+        ...(!blank && webResearch ? { webResearch } : {}),
         ...(!blank && (selectedFiles.length ? {sourceFileIds:selectedFiles.map(file=>file.id)} :
           mode==='source' && draft.sourceDeckId ? {sourceDeckId:draft.sourceDeckId} : activeSource ? {source:activeSource} : {})),
       });
@@ -637,14 +653,27 @@ export function Start({
       // The input-method shortcut has been consumed. Refresh now resumes the saved question.
       history.replaceState(history.state, '', '#/start');
     }
-    if(step>=0 && question) recordStart(question);
-    if (step === questions.length - 1) void finish();
-    else patch({ step: step + 1 });
+    if (step >= 0) void finish();
+    else patch({ step: 0 });
   }
-  const modeName = modes.find(([id]) => id === mode)![1];
   const previewName = mode === 'pptx' ? importFile?.name : fileName;
+  const actions = (
+    <footer className="creation-actions">
+      {error && <p role="alert">{error}</p>}
+      {warning && <Button type="button" variant="outline" disabled={busy} onClick={() => void finish(warning.blank, warning.token)}>
+        {{en:'Create anyway',ru:'Создать всё равно',kk:'Сонда да жасау'}[locale]}
+      </Button>}
+      {step < 0 && <span />}
+      <Button type="submit" disabled={busy || readingFile || readingStyle}>
+        {busy ? t.working : mode === 'pptx' ? t.importSlides : step >= 0
+          ? review ? ui.createOutline : t.generate
+          : t.continue}
+        <ArrowRightIcon data-icon="inline-end" />
+      </Button>
+    </footer>
+  );
   return (
-    <div className="creation-page">
+    <div className="creation-page" data-stage={step < 0 ? 'compose' : 'questions'}>
       {step < 0 && (
         <div className="creation-back">
           <Button variant="ghost" size="sm" onClick={onBack}>
@@ -655,7 +684,7 @@ export function Start({
       )}
       <header className="creation-heading creation-heading-actions">
         <div>
-          <h1>{step < 0 ? t.startLesson : t.detailTitle}</h1>
+          <h1 ref={step >= 0 ? setupHeading : undefined} tabIndex={step >= 0 ? -1 : undefined}>{step < 0 ? t.startLesson : t.detailTitle}</h1>
           {step >= 0 && <p>{t.detailIntro}</p>}
         </div>
         {step < 0 && (
@@ -680,6 +709,7 @@ export function Start({
                 placeholder={t.topicHint}
                 onChange={(e) => patch({ topic: e.target.value })}
               />
+              {offersWebResearch && <div className="justify-self-start">{webControls}</div>}
             </div>
             <fieldset className="creation-sources">
               <legend>{t.startFrom}</legend>
@@ -695,7 +725,7 @@ export function Start({
                       ++fileRequest.current;
                       fileExtraction.current?.abort();
                       setReadingFile(false);
-                      patch({ mode: id });
+                      patch({ mode: id, ...(id !== 'topic' && {webResearch:undefined}) });
                       setError('');
                     }}
                   >
@@ -763,7 +793,7 @@ export function Start({
               </div>
             )}
             {mode === 'source' && <div className="grid justify-items-start gap-2">
-              <SourceFilePicker locale={locale} limit={10} disabled={busy} selected={selectedFiles.map(file=>file.id)} onSelect={files=>{
+              <SourceFilePicker locale={locale} limit={10} disabled={busy} allowScans={ocr} selected={selectedFiles.map(file=>file.id)} onSelect={files=>{
                 patch({sourceFiles:files,sourceDeckId:undefined,sampleSource:false,topic:topic || files[0]?.name.replace(/\.[^.]+$/,'') || ''});
               }}/>
               {selectedFiles.length>0 && <ul className="grid gap-1 text-sm" aria-label={sourceCopy[locale].title}>
@@ -786,7 +816,7 @@ export function Start({
                 {savedSources.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
               </select>
             </div>}
-            {mode === 'topic' && researchTopics.length > 0 && <div className="creation-topic">
+            {mode === 'topic' && !offersWebResearch && researchTopics.length > 0 && <div className="creation-topic">
               <Label className="creation-review"><Checkbox checked={Boolean(researchQuery)}
                 onCheckedChange={checked => patch({ researchQuery: checked ? researchTopics[0] : undefined })}/>{s.research}</Label>
               {researchQuery && <><Label htmlFor="public-query">{s.publicQuery}</Label>
@@ -832,68 +862,96 @@ export function Start({
             </Button>
           </section>
         ) : (
-          <section className="creation-composer creation-questions">
-            <div className="creation-steps">
-              <div className="creation-step-status" aria-hidden="true"><strong>{stepLabels[question]}</strong><span>{step + 1} / {questions.length}</span></div>
-              <ol className="creation-progress" aria-label={t.detailTitle}>
-                {questions.map((name, i) => (
-                  <li key={name} aria-current={i === step ? 'step' : undefined} data-state={i < step ? 'done' : i === step ? 'active' : 'next'}>
-                    <span className="creation-step-label"><b aria-hidden="true">{i < step ? <CheckIcon/> : i + 1}</b>{stepLabels[name]}</span>
-                  </li>
-                ))}
-              </ol>
+          <section className="creation-questions">
+            <div className="creation-setup-context">
+              <div>
+                <strong className="creation-brief-title">{topic}</strong>
+                <div className="creation-setup-meta">
+                  <span className="creation-language-name"><LanguageFlag locale={language}/>{languages[language]}</span>
+                  {draft.template && <span><StackIcon aria-hidden />{lessonTemplates[draft.template].name[locale]}</span>}
+                  {webControls}
+                </div>
+              </div>
+              <Button className="creation-setup-edit" type="button" variant="ghost" size="sm" disabled={busy} onClick={() => patch({ step: -1 })}>
+                <PencilSimpleIcon data-icon="inline-start" aria-hidden />{s.edit}
+              </Button>
             </div>
-            <fieldset className="creation-answer-set" key={question}>
-              <legend id="creation-question-heading" tabIndex={-1} ref={questionHeading}>
-                {questionTitles[question]}
-              </legend>
-              <p className="creation-question-hint">{questionHints[question]}</p>
-              <RadioGroup name={question} value={activeAnswer} aria-labelledby="creation-question-heading"
-                onValueChange={value=>selectAnswer(String(value))}>
-                {[[t.auto, ''], ...choices[question], [customLabel[question],'custom'],
-                  ...(question==='duration' ? [[ui.customSlides,'exact']] : [])].map(([label, value]) => {
-                  const Icon = answerIcons[value] ?? TimerIcon;
-                  return <Label className="creation-question" key={value} data-checked={activeAnswer === value}>
-                    <span className="creation-answer-icon" aria-hidden><Icon/></span><span>{label}</span><Radio value={value}/>
-                  </Label>;
-                })}
-              </RadioGroup>
-              {activeAnswer==='custom' && <div className="creation-custom-field">
-                <Label htmlFor="creation-custom-answer">{question==='duration' ? ui.customDurationHint : customLabel[question]}</Label>
-                <Input id="creation-custom-answer" type={question==='duration'?'number':'text'} required min={question==='duration'?1:undefined}
-                  maxLength={question==='level' ? 120 : 240} placeholder={customPlaceholder[question]} value={answers[customField[question]]??''}
-                  onChange={event=>patch({answers:{...answers,[customField[question]]:event.target.value}})}/>
-              </div>}
-              {activeAnswer==='exact' && <div className="creation-custom-field">
-                <Label htmlFor="creation-slide-count">{ui.customSlidesHint} · {minGeneratedSlides}–{maxLessonSlides}</Label>
-                <Input id="creation-slide-count" type="number" min={minGeneratedSlides} max={maxLessonSlides} step={1} required
-                  value={draft.slideCount??''} onChange={event=>patch({slideCount:event.target.value})}/>
-              </div>}
-              {question==='level' && languagePicker}
-              {question==='image' && activeAnswer==='own' && <div className="creation-custom-field">
-                <Label htmlFor="creation-own-image">{ui.uploadImage}</Label>
-                <Input id="creation-own-image" type="file" accept="image/png,image/jpeg,image/webp" disabled={busy} onChange={event=>{
-                  const file=event.target.files?.[0];
-                  if (file && (!file.size || file.size>10_000_000)) {
-                    setOwnImage(undefined);
-                    event.target.value='';
-                    setError(ui.ownImageLimit);
-                    return;
-                  }
-                  setError('');
-                  setOwnImage(file);
-                }}/>
-                {ownImage && <><span>{ownImage.name}</span><Label htmlFor="creation-own-image-alt">{ui.ownImageAlt}</Label>
-                  <Input id="creation-own-image-alt" value={ownImageAlt} maxLength={400} onChange={event=>setOwnImageAlt(event.target.value)}/>
-                </>}
-              </div>}
-            </fieldset>
+            <div className="creation-question-stack">
+              {questions.map(question => {
+                const activeAnswer = question === 'duration' && draft.slideCount !== undefined ? 'exact' :
+                  draft.customAnswers?.[question] ? 'custom' : answers[question] ?? '';
+                const groupId = `creation-question-${question}`;
+                return (
+                  <fieldset className="creation-question-block" key={question}>
+                    <legend id={groupId}>{questionTitles[question]}</legend>
+                    <div className="creation-question-inner">
+                      <p className="creation-question-hint" id={`${groupId}-hint`}>{questionHints[question]}</p>
+                      <RadioGroup name={question} value={activeAnswer} aria-labelledby={groupId} aria-describedby={`${groupId}-hint`}
+                        className="creation-answer-options" data-layout={question === 'image' ? 'visual' : 'options'} disabled={busy}
+                        onValueChange={value=>selectAnswer(question, String(value))}>
+                        {[[t.auto, ''], ...choices[question], [customLabel[question], 'custom'],
+                          ...(question === 'duration' ? [[ui.customSlides, 'exact']] : [])].map(([label, value], index) => {
+                            const sample = imageSamples[value];
+                            const ImageAction = value === 'own' ? UploadSimpleIcon : PencilSimpleIcon;
+                            const description = question === 'image' ? visualDescriptions[value] : undefined;
+                            const descriptionId = `${groupId}-option-${index}`;
+                            return (
+                              <Label className="creation-question" key={value} data-checked={activeAnswer === value}>
+                                {question === 'image' && <span className="creation-answer-icon" aria-hidden>
+                                  {sample ? <ImageLayoutSample mode={sample} /> : <ImageAction />}
+                                </span>}
+                                <span className="creation-answer-copy">
+                                  <span>{label}</span>{description && <small id={descriptionId}>{description}</small>}
+                                </span>
+                                <Radio value={value} aria-label={label} aria-describedby={description ? descriptionId : undefined}/>
+                              </Label>
+                            );
+                          })}
+                      </RadioGroup>
+                      {activeAnswer === 'custom' && <div className="creation-custom-field">
+                        <Label htmlFor={`${groupId}-custom`}>{question === 'duration' ? ui.customDurationHint : customLabel[question]}</Label>
+                        <Input id={`${groupId}-custom`} type={question === 'duration' ? 'number' : 'text'} required min={question === 'duration' ? 1 : undefined}
+                          maxLength={question === 'level' ? 120 : 240} placeholder={customPlaceholder[question]} value={answers[customField[question]] ?? ''}
+                          onChange={event=>patch({answers:{...answers,[customField[question]]:event.target.value}})}/>
+                      </div>}
+                      {activeAnswer === 'exact' && <div className="creation-custom-field">
+                        <Label htmlFor="creation-slide-count">{ui.customSlidesHint} · {minGeneratedSlides}–{maxLessonSlides}</Label>
+                        <Input id="creation-slide-count" type="number" min={minGeneratedSlides} max={maxLessonSlides} step={1} required
+                          value={draft.slideCount ?? ''} onChange={event=>patch({slideCount:event.target.value})}/>
+                      </div>}
+                      {question === 'level' && languagePicker}
+                      {question === 'image' && activeAnswer === 'own' && <div className="creation-custom-field">
+                        <div className="creation-upload">
+                          <Label htmlFor="creation-own-image"><UploadSimpleIcon aria-hidden />{ownImage?.name ?? ui.uploadImage}
+                            <input id="creation-own-image" type="file" aria-label={ui.uploadImage} accept="image/png,image/jpeg,image/webp" disabled={busy} onChange={event=>{
+                              const file = event.target.files?.[0];
+                              if (file && (!file.size || file.size > 10_000_000)) {
+                                setOwnImage(undefined);
+                                event.target.value = '';
+                                setError(ui.ownImageLimit);
+                                return;
+                              }
+                              setError('');
+                              setOwnImage(file);
+                            }}/>
+                          </Label>
+                        </div>
+                        {ownImage && <><Label htmlFor="creation-own-image-alt">{ui.ownImageAlt}</Label>
+                          <Input id="creation-own-image-alt" value={ownImageAlt} maxLength={400} onChange={event=>setOwnImageAlt(event.target.value)}/>
+                        </>}
+                      </div>}
+                    </div>
+                  </fieldset>
+                );
+              })}
+            </div>
+            {actions}
           </section>
         )}
-        <aside className="creation-settings" data-brief={step>=0} aria-label={step < 0 ? s.settings : s.brief}>
+        {step < 0 && <aside className="creation-settings" data-brief={false} aria-label={s.settings}>
           <h2>
-            {step < 0 ? <SlidersHorizontalIcon /> : <BookOpenIcon />}
-            {step < 0 ? s.settings : s.brief}
+            <SlidersHorizontalIcon />
+            {s.settings}
           </h2>
           <Button
             variant="ghost"
@@ -903,119 +961,52 @@ export function Start({
             aria-controls="lesson-creation-settings"
             onClick={() => setShowSettings((open) => !open)}
           >
-            {step < 0 ? <SlidersHorizontalIcon /> : <BookOpenIcon />}
-            <strong>{step < 0 ? s.settings : s.brief}</strong>
+            <SlidersHorizontalIcon />
+            <strong>{s.settings}</strong>
             <span className="creation-language-name"><LanguageFlag locale={language}/>{languages[language]}</span>
             <CaretDownIcon />
           </Button>
           <div id="lesson-creation-settings" className="creation-settings-body" data-open={showSettings}>
-            {step < 0 ? (
-              <>
-                {languagePicker}
-                {mode !== 'pptx' && <><Label className="creation-review">
-                  <Checkbox
-                    checked={review}
-                    onCheckedChange={(checked) => patch({ review: checked })}
-                  />
-                  {t.reviewOutline}
-                </Label>
-                <fieldset className="creation-providers" aria-describedby="provider-note">
-                  <legend id="creation-provider-label">{t.providerLabel}</legend>
-                  <RadioGroup
-                    aria-labelledby="creation-provider-label"
-                    name="provider"
-                    value={provider}
-                    onValueChange={(value) => {
-                      if (value === 'alem' || value === 'fixture' || value === 'local') patch({ provider: value });
-                    }}
-                  >
-                    {settings.map(({ id, label, Icon }) => (
-                      <Label key={id} data-disabled={(id === 'alem' && !canUseAlem) || (id === 'local' && !canUseLocal)}>
-                        <Radio value={id} disabled={(id === 'alem' && !canUseAlem) || (id === 'local' && !canUseLocal)} />
-                        <Icon />
-                        <span>{label}</span>
-                      </Label>
-                    ))}
-                  </RadioGroup>
-                  <p id="provider-note">
-                    {provider === 'local' ? localNote : provider === 'alem'
-                      ? t.liveModeNote
-                      : mode !== 'topic'
-                        ? t.sourceModeNote
-                        : !alem
-                          ? t.liveUnavailable + ' ' + t.sampleModeNote
-                          : t.sampleModeNote}
-                  </p>
-                </fieldset></>}
-              </>
-            ) : (
-              <>
-                {draft.template && <div className="creation-brief-cover" aria-hidden="true"><CatalogCover id={draft.template} locale={locale} topic={topic}/></div>}
-                <strong className="creation-brief-title">{topic}</strong>
-                <dl className="creation-brief">
-                  <div>
-                    <dt>{t.startFrom}</dt>
-                    <dd>{modeName}</dd>
-                  </div>
-                  {draft.template && (
-                    <div>
-                      <dt>{s.current}</dt>
-                      <dd>{lessonTemplates[draft.template].name[locale]}</dd>
-                    </div>
-                  )}
-                  <div>
-                    <dt>{t.lessonLanguage}</dt>
-                    <dd><span className="creation-language-name"><LanguageFlag locale={language}/>{languages[language]}</span></dd>
-                  </div>
-                  <div>
-                    <dt>{t.providerLabel}</dt>
-                    <dd>{provider === 'local' ? localName : provider === 'alem' ? t.live : t.fixture}</dd>
-                  </div>
-                  {questions
-                    .filter((_, index) => index <= step)
-                    .map((key,index) => (
-                      <div key={key}>
-                        <dt>{stepLabels[key]}</dt>
-                        <dd><button type="button" className="creation-answer-link" onClick={()=>patch({step:index})}>{answerText(key)}</button></dd>
-                      </div>
-                    ))}
-                </dl>
-                <Button type="button" variant="outline" size="sm" onClick={() => patch({ step: -1 })}>
-                  {s.edit}
-                </Button>
-              </>
-            )}
+              {languagePicker}
+              {mode !== 'pptx' && <><Label className="creation-review">
+                <Checkbox
+                  checked={review}
+                  onCheckedChange={(checked) => patch({ review: checked })}
+                />
+                {t.reviewOutline}
+              </Label>
+              <fieldset className="creation-providers" aria-describedby="provider-note">
+                <legend id="creation-provider-label">{t.providerLabel}</legend>
+                <RadioGroup
+                  aria-labelledby="creation-provider-label"
+                  name="provider"
+                  value={provider}
+                  onValueChange={(value) => {
+                    if (value === 'alem' || value === 'fixture' || value === 'local') patch({ provider: value });
+                  }}
+                >
+                  {settings.map(({ id, label, Icon }) => {
+                    const disabled = id === 'alem' ? !canUseAlem : id === 'local' ? !canUseLocal : Boolean(webResearch);
+                    return <Label key={id} data-disabled={disabled}>
+                      <Radio value={id} disabled={disabled} />
+                      <Icon />
+                      <span>{label}</span>
+                    </Label>;
+                  })}
+                </RadioGroup>
+                <p id="provider-note">
+                  {usingPublicSources ? s.researchNote : provider === 'local' ? localNote : provider === 'alem'
+                    ? t.liveModeNote
+                    : mode !== 'topic'
+                      ? t.sourceModeNote
+                      : !alem
+                        ? t.liveUnavailable + ' ' + t.sampleModeNote
+                        : t.sampleModeNote}
+                </p>
+              </fieldset></>}
           </div>
-        </aside>
-        <footer className="creation-actions">
-          {error && <p role="alert">{error}</p>}
-          {warning && <Button type="button" variant="outline" disabled={busy} onClick={()=>void finish(warning.blank,warning.token)}>
-            {{en:'Create anyway',ru:'Создать всё равно',kk:'Сонда да жасау'}[locale]}
-          </Button>}
-          {step < 0 ? (
-            <span />
-          ) : (
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={busy}
-              onClick={() => patch({ step: step - 1 })}
-            >
-              <ArrowLeftIcon data-icon="inline-start" />
-              {t.back}
-            </Button>
-          )}
-          <Button type="submit" disabled={busy || readingFile || readingStyle}>
-            {busy
-              ? t.working
-              : mode === 'pptx' ? t.importSlides : step === questions.length - 1
-                ? review
-                  ? t.outline
-                  : t.generate
-                : t.continue}
-            <ArrowRightIcon data-icon="inline-end" />
-          </Button>
-        </footer>
+        </aside>}
+        {step < 0 && actions}
       </form>
     </div>
   );

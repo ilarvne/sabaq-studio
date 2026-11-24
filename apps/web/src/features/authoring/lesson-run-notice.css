@@ -1,0 +1,47 @@
+.studio-status {
+  position: relative;
+  flex: none;
+}
+.studio-status[data-visible='true'] {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 5px clamp(13px, 2.5vw, 34px);
+  border-block-end: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.studio-status[data-visible='false'] .studio-status-messages {
+  position: absolute;
+  clip-path: inset(50%);
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+.studio-status-messages {
+  display: grid;
+  gap: 4px;
+  flex: 1 1 225px;
+  min-width: 0;
+}
+.studio-status-messages p {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.studio-status-messages strong { color: var(--foreground); font-weight: 620; }
+.studio-status-messages svg { width: 16px; height: 16px; flex: none; align-self: flex-start; margin-block-start: 1px; }
+.studio-status-messages .studio-status-ready { color: var(--success); }
+.studio-status-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  margin-inline-start: auto;
+  gap: 3px;
+}

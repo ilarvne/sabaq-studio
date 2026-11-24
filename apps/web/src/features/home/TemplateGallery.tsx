@@ -1,8 +1,8 @@
-import { useId } from 'react';
-import { ArrowRightIcon, ArrowUpRightIcon } from '@phosphor-icons/react';
+import { ArrowRightIcon } from '@phosphor-icons/react';
 import { lessonTemplates, type TemplateId } from '@sabaq/lesson/lesson-templates';
 import type { Locale } from '@sabaq/lesson/types';
-import { Button, buttonVariants } from '@/components/shadcn/button';
+import { Button } from '@/components/shadcn/button';
+import { HomeSectionHeading } from './HomeSectionHeading';
 import './template-gallery.css';
 
 const copy = {
@@ -55,58 +55,47 @@ interface TemplateGalleryProps {
 }
 
 export function TemplateGallery({ locale, onChoose }: TemplateGalleryProps) {
-  const headingId = useId();
+  const headingId = 'featured-templates-heading';
   const labels = copy[locale];
   return (
     <section className="featured-templates" aria-labelledby={headingId}>
-      <div className="featured-templates-heading">
-        <h2 id={headingId}>{labels.heading}</h2>
-        <a
-          href="#/templates"
-          className={buttonVariants({ variant: 'ghost', size: 'sm', className: 'featured-templates-link' })}
-        >
-          {labels.all}
-          <ArrowRightIcon aria-hidden data-motion-arrow />
-        </a>
-      </div>
-      <div className="featured-templates-grid">
+      <HomeSectionHeading id={headingId} title={labels.heading} href="#/templates" linkLabel={labels.all} />
+      <ul className="featured-templates-grid" role="list">
         {templates.map((template) => {
           const { subject, lines, topic } = template[locale];
+          const format = lessonTemplates[template.id].name[locale];
           return (
-            <Button
-              key={template.id}
-              className="featured-template"
-              type="button"
-              variant="ghost"
-              data-art={template.art}
-              onClick={() => onChoose(template.id, topic)}
-            >
-              <span className="featured-template-cover" aria-hidden="true">
-                <img
-                  src={`/assets/templates/${template.art}.svg`}
-                  width="640"
-                  height="360"
-                  alt=""
-                  draggable="false"
-                />
-                <span className="featured-template-subject">{subject}</span>
-                <span className="featured-template-title">
-                  {lines.map((line) => (
-                    <span key={line}>{line}</span>
-                  ))}
+            <li key={template.id}>
+              <Button
+                className="featured-template"
+                type="button"
+                variant="outline"
+                data-art={template.art}
+                aria-description={lines.join(' ') !== topic ? topic : undefined}
+                onClick={() => onChoose(template.id, topic)}
+              >
+                <span className="featured-template-cover">
+                  <img
+                    src={`/assets/templates/${template.art}.svg`}
+                    width="640"
+                    height="360"
+                    alt=""
+                    draggable="false"
+                  />
+                  <span className="featured-template-title">
+                    {lines.map((line) => <span key={line}>{line}</span>)}
+                  </span>
+                  <span className="featured-template-subject">{subject}</span>
                 </span>
-              </span>
-              <span className="featured-template-caption">
-                <span>
-                  <strong>{topic}</strong>
-                  <span>{lessonTemplates[template.id].name[locale]}</span>
+                <span className="featured-template-caption">
+                  <span>{format}</span>
+                  <ArrowRightIcon aria-hidden />
                 </span>
-                <ArrowUpRightIcon aria-hidden />
-              </span>
-            </Button>
+              </Button>
+            </li>
           );
         })}
-      </div>
+      </ul>
     </section>
   );
 }

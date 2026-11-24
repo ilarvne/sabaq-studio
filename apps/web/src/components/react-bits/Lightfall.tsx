@@ -544,12 +544,12 @@ const Lightfall = ({
     };
     const toLinear = (value: string) => toRgb(value).map(channel => channel * channel);
 
-    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+    const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const palette = new Float32Array(MAX_COLORS * 3);
     const pointer = { x: 0, y: 0, inside: false, held: false };
     const state = {
       travel: 0,
-      intro: settingsRef.current.intro && !reduce ? 0 : 1,
+      intro: settingsRef.current.intro && !motion.matches ? 0 : 1,
       mouseX: 0,
       mouseY: 0,
       lensX: 0,
@@ -676,6 +676,7 @@ const Lightfall = ({
         return;
       }
       const s = settingsRef.current;
+      const reduce = motion.matches;
       const dt = last ? Math.min(0.05, (now - last) / 1000) : 1 / 60;
       last = now;
       if (!s.intro || reduce) state.intro = 1;
@@ -770,6 +771,15 @@ const Lightfall = ({
       last = 0;
       wake();
     };
+    const onMotionChange = () => {
+      if (motion.matches) {
+        state.intro = 1;
+        state.warp = 0;
+        state.touch = 0;
+        pointer.held = false;
+      }
+      onVisibility();
+    };
 
     const resizeObserver = new ResizeObserver(resize);
     resizeObserver.observe(container);
@@ -787,6 +797,7 @@ const Lightfall = ({
     window.addEventListener('pointercancel', onPointerUp, { passive: true });
     document.documentElement.addEventListener('pointerleave', onPointerLeave);
     document.addEventListener('visibilitychange', onVisibility);
+    motion.addEventListener('change', onMotionChange);
     resize();
 
     let lastDpr = settingsRef.current.dpr;
@@ -814,6 +825,7 @@ const Lightfall = ({
       window.removeEventListener('pointercancel', onPointerUp);
       document.documentElement.removeEventListener('pointerleave', onPointerLeave);
       document.removeEventListener('visibilitychange', onVisibility);
+      motion.removeEventListener('change', onMotionChange);
       [scene, ...levels.flat()].forEach(target => {
         if (target.texture) gl.deleteTexture(target.texture);
         gl.deleteFramebuffer(target.framebuffer);

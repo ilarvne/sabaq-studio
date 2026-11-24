@@ -93,6 +93,7 @@ export function LessonBriefControls({
             <PopoverTrigger
               render={<Button type="button" size="sm" variant="ghost" disabled={disabled} />}
               className="brief-chip"
+              data-brief-field={key}
               title={`${c[key]}${valueText ? ` · ${valueText}` : ''}`}
               data-selected={Boolean(selected)}
               aria-label={`${c[key]}${valueText ? ` · ${valueText}` : ''}`}

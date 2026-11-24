@@ -3,12 +3,13 @@ import {
   AssistantRuntimeProvider, ComposerPrimitive, MessageNotSentError, ThreadPrimitive,
   useAui, useAuiEvent, useAuiState, useExternalStoreRuntime, type ThreadMessage,
 } from '@assistant-ui/react';
-import { ArrowUpIcon, CircleNotchIcon, FileTextIcon, MicrophoneIcon, PlusIcon, StopIcon } from '@phosphor-icons/react';
+import { ArrowUpIcon, CircleNotchIcon, FileTextIcon, MicrophoneIcon, StopIcon } from '@phosphor-icons/react';
 import type { CreateInput, Locale } from '@sabaq/lesson/types';
 import { Button } from '@/components/shadcn/button';
 import { words } from '@/copy';
 import { eligibleProviders, HomePromptSettings, selectedProvider, slideCountHint, validSlideCount, type PromptSettings } from './HomePromptSettings';
 import { LessonBriefControls } from './LessonBriefControls';
+import { AssistantResearchMenu } from '@/features/assistant/AssistantResearch';
 import {
   AssistantComposerFiles, AssistantSourcePicker, assistantAttachmentCopy, attachmentSource, createAssistantAttachmentAdapter, maxAssistantAttachments,
 } from '@/features/assistant/AssistantAttachments';
@@ -20,13 +21,13 @@ import './home-composer.css';
 
 const copy = {
   en: { prompt: 'Presentation brief', placeholder: 'What is the lesson about? Add a topic, notes, or a document…',
-    attach: 'Attach source material', count: 'Slide count', slides: 'slides', language: 'Presentation language',
+    webPlaceholder: 'What public topic should the lesson cover?',
     generate: 'Generate', generating: 'Generating…', confirm: 'Create anyway', notes: 'Pasted notes', limit: 'Keep the combined notes and source documents within 100,000 characters.' },
   ru: { prompt: 'Задание для презентации', placeholder: 'О чём будет урок? Введите тему, вставьте конспект или добавьте документ…',
-    attach: 'Прикрепить материалы', count: 'Количество слайдов', slides: 'слайдов', language: 'Язык презентации',
+    webPlaceholder: 'Какую открытую тему исследуем для урока?',
     generate: 'Создать', generating: 'Создаём…', confirm: 'Создать всё равно', notes: 'Текст конспекта', limit: 'Общий объём конспекта и материалов должен быть не более 100 000 символов.' },
   kk: { prompt: 'Презентация тапсырмасы', placeholder: 'Сабақтың тақырыбын жазыңыз, жазбаңызды енгізіңіз немесе құжат тіркеңіз…',
-    attach: 'Материал тіркеу', count: 'Слайд саны', slides: 'слайд', language: 'Презентация тілі',
+    webPlaceholder: 'Сабақ үшін қандай ашық тақырыпты зерттейміз?',
     generate: 'Жасау', generating: 'Жасалуда…', confirm: 'Сонда да жасау', notes: 'Сабақ жазбалары', limit: 'Жазбалар мен құжаттардың жалпы көлемін 100 000 таңбаға дейін қысқартыңыз.' },
 };
 
@@ -42,16 +43,18 @@ type Props = {
   localAuthoring: boolean;
   suggestion?: Suggestion;
   researchTopics?: string[];
+  assistantWebResearch?: boolean;
   onCreate(input: CreateInput): Promise<void>;
 };
 
-function ComposerControls({ locale, settings, answers, onSettings, onAnswers, suggestion, researchTopics, localAuthoring, alem, busy, error, confirm, onEdit, onError, onConfirm, alemSpeech, scanOcr }: {
+function ComposerControls({ locale, settings, answers, onSettings, onAnswers, suggestion, researchTopics, assistantWebResearch, localAuthoring, alem, busy, error, confirm, onEdit, onError, onConfirm, alemSpeech, scanOcr }: {
   settings: PromptSettings;
   answers: Answers;
   onSettings(value: Partial<PromptSettings>): void;
   onAnswers(value: Answers): void;
   suggestion?: Suggestion;
   researchTopics: string[];
+  assistantWebResearch: boolean;
   localAuthoring: boolean;
   alem: boolean;
   locale: Locale;
@@ -85,7 +88,12 @@ function ComposerControls({ locale, settings, answers, onSettings, onAnswers, su
   const notesLength = useAuiState(state => state.composer.text.trim().length > maxTopicLength ? state.composer.text.trim().length : 0);
   const tooLong = notesLength > maxSourceLength;
   const hasSource = attachments.length > 0 || notesLength > 0;
-  const researching = !hasSource && researchTopics.includes(settings.researchQuery ?? '');
+  const webAvailable = assistantWebResearch && alem;
+  const webMode = webAvailable && !hasSource ? settings.webResearch : undefined;
+  const presetResearch = !hasSource && researchTopics.includes(settings.researchQuery ?? '');
+  useEffect(() => {
+    if (settings.webResearch && (hasSource || !webAvailable)) onSettings({webResearch: undefined});
+  }, [hasSource, webAvailable, settings.webResearch, onSettings]);
   const invalidCount = !validSlideCount(settings.count);
   const pending = attachments.some(file => file.status.type === 'running' || file.status.type === 'incomplete');
   const blocked = pending || tooLong || invalidCount || Boolean(speaking) || recording || attachments.length > maxAssistantAttachments;
@@ -111,7 +119,7 @@ function ComposerControls({ locale, settings, answers, onSettings, onAnswers, su
           {speaking === 'starting' ? voice.starting : voice.listening} <ComposerPrimitive.DictationTranscript/>
         </div>}
         {notesLength > 0 && <div className="home-prompt-notes"><FileTextIcon aria-hidden="true"/>{t.notes}</div>}
-        <ComposerPrimitive.Input ref={inputRef} className="home-prompt-input" aria-label={t.prompt} placeholder={t.placeholder}
+        <ComposerPrimitive.Input ref={inputRef} className="home-prompt-input" aria-label={t.prompt} placeholder={webMode ? t.webPlaceholder : t.placeholder}
           maxRows={8} disabled={busy} enterKeyHint="send" submitMode={blocked ? 'none' : 'enter'}
           onPaste={event => {
             if (event.clipboardData.files.length + attachments.length > maxAssistantAttachments) {
@@ -120,32 +128,33 @@ function ComposerControls({ locale, settings, answers, onSettings, onAnswers, su
             }
           }}/>
         <div className="home-prompt-toolbar">
-          <ComposerPrimitive.AddAttachment render={<Button variant="ghost" size="icon"/>} className="home-prompt-attach"
-            multiple={false} disabled={busy || attachments.length >= maxAssistantAttachments}
-            title={`${t.attach} · TXT, MD, PDF, DOCX${scanOcr ? ', PNG, JPG' : ''}`} aria-label={t.attach}>
-            <PlusIcon aria-hidden="true"/>
-          </ComposerPrimitive.AddAttachment>
-          <AssistantSourcePicker locale={locale} disabled={busy}/>
-        <LessonBriefControls locale={locale} answers={answers} onChange={onAnswers} disabled={busy}/>
-          <span className="home-prompt-spacer" aria-hidden="true"/>
-          <HomePromptSettings locale={locale} settings={settings} disabled={busy} onChange={onSettings} hasSource={hasSource}
-            researchTopics={researchTopics} providers={researching ? ['fixture'] : eligibleProviders(localAuthoring, alem, hasSource)}/>
-          {dictationAvailable && (speaking ?
-            <ComposerPrimitive.StopDictation render={<Button variant="secondary" size="icon"/>} className="home-prompt-mic" title={voice.stopDictating} aria-label={voice.stopDictating}>
-              <StopIcon weight="fill" aria-hidden="true"/>
-            </ComposerPrimitive.StopDictation> :
-            <ComposerPrimitive.Dictate render={<Button variant="ghost" size="icon"/>} className="home-prompt-mic" disabled={busy} title={voice.dictate} aria-label={voice.dictate}>
-              <MicrophoneIcon aria-hidden="true"/>
-            </ComposerPrimitive.Dictate>)}
-          {!dictationAvailable && alemSpeech && <AlemDictation locale={locale} language={language} disabled={busy}
-            className="home-prompt-mic home-cloud-dictation" onActive={setRecording} onTranscript={text => {
-              const draft = aui.composer().getState().text;
-              aui.composer().setText([draft.trimEnd(), text].filter(Boolean).join(' '));
-              onEdit();
-            }}/>}
-          <ComposerPrimitive.Send render={<Button/>} className="home-prompt-send" disabled={busy || blocked} title={t.generate} aria-label={busy ? t.generating : t.generate}>
-            {busy ? <CircleNotchIcon className="home-prompt-spinner" aria-hidden="true"/> : <ArrowUpIcon weight="bold" aria-hidden="true"/>}
-          </ComposerPrimitive.Send>
+          <div className="home-prompt-context">
+            <AssistantSourcePicker locale={locale} disabled={busy} className="home-prompt-attach" allowScans={scanOcr}/>
+            <AssistantResearchMenu locale={locale} mode={webMode} available={assistantWebResearch} surface="authoring"
+              modelAvailable={alem} conflicting={hasSource} disabled={busy}
+              onModeChange={mode => onSettings({webResearch:mode, researchQuery:undefined})}/>
+            <LessonBriefControls locale={locale} answers={answers} onChange={onAnswers} disabled={busy}/>
+          </div>
+          <div className="home-prompt-output">
+            <HomePromptSettings locale={locale} settings={settings} disabled={busy} onChange={onSettings} hasSource={hasSource}
+              researchTopics={researchTopics} providers={webMode ? ['alem'] : presetResearch ? ['fixture'] : eligibleProviders(localAuthoring, alem, hasSource)}/>
+            {dictationAvailable && (speaking ?
+              <ComposerPrimitive.StopDictation render={<Button variant="secondary" size="icon"/>} className="home-prompt-mic" title={voice.stopDictating} aria-label={voice.stopDictating}>
+                <StopIcon weight="fill" aria-hidden="true"/>
+              </ComposerPrimitive.StopDictation> :
+              <ComposerPrimitive.Dictate render={<Button variant="ghost" size="icon"/>} className="home-prompt-mic" disabled={busy} title={voice.dictate} aria-label={voice.dictate}>
+                <MicrophoneIcon aria-hidden="true"/>
+              </ComposerPrimitive.Dictate>)}
+            {!dictationAvailable && alemSpeech && <AlemDictation locale={locale} language={language} disabled={busy}
+              className="home-prompt-mic home-cloud-dictation" onActive={setRecording} onTranscript={text => {
+                const draft = aui.composer().getState().text;
+                aui.composer().setText([draft.trimEnd(), text].filter(Boolean).join(' '));
+                onEdit();
+              }}/>}
+            <ComposerPrimitive.Send render={<Button/>} className="home-prompt-send" disabled={busy || blocked} title={t.generate} aria-label={busy ? t.generating : t.generate}>
+              {busy ? <CircleNotchIcon className="home-prompt-spinner" aria-hidden="true"/> : <ArrowUpIcon weight="bold" aria-hidden="true"/>}
+            </ComposerPrimitive.Send>
+          </div>
         </div>
       </ComposerPrimitive.AttachmentDropzone>
       {feedback && <div className="home-prompt-error"><span role="alert">{feedback}</span>
@@ -155,7 +164,7 @@ function ComposerControls({ locale, settings, answers, onSettings, onAnswers, su
   </ThreadPrimitive.Root>;
 }
 
-export function HomeComposer({ locale, alem, localAuthoring, onCreate, suggestion, researchTopics = [] }: Props) {
+export function HomeComposer({ locale, alem, localAuthoring, onCreate, suggestion, researchTopics = [], assistantWebResearch = false }: Props) {
   const [settings, setSettings] = useState<PromptSettings>(() => ({
     count: null, imageMode: 'auto', review: !matchMedia('(max-width: 720px)').matches,
   }));
@@ -168,6 +177,7 @@ export function HomeComposer({ locale, alem, localAuthoring, onCreate, suggestio
   const submitting = useRef(false);
   const language = settings.language ?? locale;
   const media = useMediaCapabilities();
+  const legacyResearchTopics = assistantWebResearch ? [] : researchTopics;
   const attachments = useMemo(() => createAssistantAttachmentAdapter(locale, media.ocr), [locale, media.ocr]);
   const dictation = useOnDeviceDictation(language);
   const clearError = () => { setError(''); setConfirmation(undefined); };
@@ -191,11 +201,13 @@ export function HomeComposer({ locale, alem, localAuthoring, onCreate, suggestio
         setError(!validSlideCount(settings.count) ? slideCountHint(locale) : copy[locale].limit);
         throw new MessageNotSentError();
       }
-      const researchQuery = !hasSource && researchTopics.includes(settings.researchQuery ?? '') ? settings.researchQuery : undefined;
+      const webResearch = assistantWebResearch && alem && !hasSource ? settings.webResearch : undefined;
+      const researchQuery = !hasSource && legacyResearchTopics.includes(settings.researchQuery ?? '') ? settings.researchQuery : undefined;
       const input: CreateInput = {
         topic, language, answers, imageMode: settings.imageMode, review: settings.review,
-        provider: researchQuery ? 'fixture' : selectedProvider(settings.provider, eligibleProviders(localAuthoring, alem, hasSource)),
+        provider: webResearch ? 'alem' : researchQuery ? 'fixture' : selectedProvider(settings.provider, eligibleProviders(localAuthoring, alem, hasSource)),
         ...(researchQuery && {researchQuery}),
+        ...(webResearch && {webResearch}),
         ...(settings.count !== null && {slideCount: Number(settings.count)}),
         ...(saved.length ? {sourceFileIds:[...new Set(saved.map(file=>file.id))], ...(notes && {sourceNotes:text})}
           : notes ? {source:{name:copy[locale].notes,text}} : {}),
@@ -223,7 +235,7 @@ export function HomeComposer({ locale, alem, localAuthoring, onCreate, suggestio
     },
   });
   return <AssistantRuntimeProvider runtime={runtime}>
-    <ComposerControls locale={locale} settings={settings} answers={answers} suggestion={suggestion} researchTopics={researchTopics} alem={alem} localAuthoring={localAuthoring} busy={busy} error={error} confirm={Boolean(confirmation)}
+    <ComposerControls locale={locale} settings={settings} answers={answers} suggestion={suggestion} researchTopics={legacyResearchTopics} assistantWebResearch={assistantWebResearch} alem={alem} localAuthoring={localAuthoring} busy={busy} error={error} confirm={Boolean(confirmation)}
       alemSpeech={media.transcription.includes(language)} scanOcr={media.ocr}
       onError={setError} onEdit={clearError} onConfirm={() => { explicitConfirmation.current = true; }}
       onSettings={value => { clearError(); setSettings(current => ({...current, ...value})); }}
