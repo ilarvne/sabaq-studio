@@ -15,6 +15,7 @@
     "dev": "bun --no-env-file scripts/dev.mjs",
     "build": "turbo run build",
     "start": "bun --no-env-file scripts/start.mjs",
+    "seed:demo": "bun --no-env-file apps/api/tools/seed-demo.ts",
     "typecheck": "bun run check:workspaces && turbo run typecheck && tsc --noEmit -p tsconfig.tools.json",
     "test": "turbo run test",
     "test:e2e": "playwright test",
