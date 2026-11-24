@@ -1,5 +1,6 @@
-import { lessonTemplates, templateSubjects, type TemplateId } from '@sabaq/lesson/lesson-templates';
+import { lessonTemplates, type TemplateId } from '@sabaq/lesson/lesson-templates';
 import type { Locale } from '@sabaq/lesson/types';
+import { SlideCanvas } from '@sabaq/slide-renderer/canvas';
 
 const art = {
   measurement:'lab', explain:'fern', revise:'geometry', assessment:'graph', meeting:'book', defense:'plan',
@@ -12,10 +13,18 @@ const illustrations = {fern:'field-notes', geometry:'shape-studies', graph:'data
 
 export function CatalogCover({ id, locale, topic }: { id:TemplateId; locale:Locale; topic?:string }) {
   const preset = lessonTemplates[id];
+  if (id === 'fieldJournal' || id === 'visualStudy' || id === 'projectBrief') {
+    return <span className="catalog-art" data-template={id} aria-hidden="true" inert>
+      <SlideCanvas thumbnail deck={{language:locale,theme:preset.theme}} slide={{
+        id:'catalog-'+id, status:'ready', version:1, layout:'cover', lessonPart:'lesson',
+        title:topic?.trim() || preset.topic[locale], body:'', notes:'',
+      }}/>
+    </span>;
+  }
   const kind = art[id];
   const image = kind in illustrations ? illustrations[kind as keyof typeof illustrations] : undefined;
-  return <span className="catalog-art" data-kind={kind} data-template={id}>
-    {image ? <img src={`/assets/templates/${image}.svg`} width="640" height="360" alt="" loading="lazy"/> :
+  return <span className="catalog-art" data-kind={kind} data-template={id} aria-hidden="true">
+    {image ? <img src={`/assets/templates/${image}.svg`} width="640" height="360" alt=""/> :
       <svg viewBox="0 0 320 180" className="catalog-drawing" focusable="false" aria-hidden="true">
         {kind === 'lab' && <g fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round">
           <path d="M197 34h28m-23 0v49l-32 54q-4 7 4 7h73q8 0 4-8l-31-54V34"/>
@@ -42,7 +51,6 @@ export function CatalogCover({ id, locale, topic }: { id:TemplateId; locale:Loca
           </g>
         </g>}
       </svg>}
-    <span className="catalog-art-subject">{templateSubjects[preset.subject][locale]}</span>
     <strong className="catalog-art-title">{topic?.trim() || preset.topic[locale]}</strong>
   </span>;
 }

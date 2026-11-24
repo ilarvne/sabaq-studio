@@ -1,9 +1,10 @@
 import type { CreateInput, Deck, OutlineItem, Slide, SlideImage } from '@sabaq/lesson/types';
 import { lessonImageGuidance } from '@sabaq/lesson/image-style';
 import { generateLocal } from './local-generation';
-import { generateSlide, type LessonSlideDraft } from './alem';
+import { generateSlide, type LessonSlideDraft } from './generate-slide';
 import { allowsOpenAIImages, hasLessonImageProvider, resolveSlideIllustration } from '../media/visuals';
-import { outlineIllustration, requestedImageMode } from './image-mode';
+import { eligibleForIllustration, outlineIllustration, requestedImageMode } from './image-mode';
+import { fitGeneratedLayout, isImageLayout } from './layout-planner';
 
 export async function composeLessonSlide(
   deck: Deck,
@@ -12,8 +13,11 @@ export async function composeLessonSlide(
   options: { signal: AbortSignal; mediaRoot: string; preferences?: CreateInput['answers'] },
 ): Promise<Partial<Slide>> {
   const mode = requestedImageMode(deck.imageMode, options.preferences);
+  const wantsArt = isImageLayout(item.layout) || !!item.visualDescription;
+  const gallery = item.layout === 'image-grid' && !!item.imageScenes?.length;
   const allowIllustration = deck.imageSource !== 'own' && deck.imageSource !== 'none' && mode !== 'none' &&
-    (mode !== 'auto' || deck.slides.filter(slide => slide.id !== item.id && slide.image).length < 5);
+    eligibleForIllustration(item) && !gallery &&
+    (mode === 'auto' ? deck.slides.filter(slide => slide.id !== item.id && slide.image).length < 5 : wantsArt);
   const allowOpenAI = allowsOpenAIImages(deck);
   const canGenerate = allowIllustration && hasLessonImageProvider(deck);
   const draft = await generateSlide(
@@ -25,7 +29,7 @@ export async function composeLessonSlide(
     image?.provenance?.source === 'catalog' && image.provenance.asset === suggested.asset,
   );
   const request = suggested?.asset && !used ? suggested : canGenerate ? { ...suggested, asset: undefined } : undefined;
-  const fallback = canGenerate && !draft.table && !draft.chart && !draft.diagram && (!request || (!request.asset && !request.prompt));
+  const fallback = canGenerate && wantsArt && !draft.table && !draft.chart && !draft.diagram && (!request || (!request.asset && !request.prompt));
   const illustration = await resolveSlideIllustration(
     fallback ? outlineIllustration(item) : request,
     { language: deck.language, topic:deck.topic+' — '+item.title, signal: options.signal, mediaRoot: options.mediaRoot, allowOpenAI, ...lessonImageGuidance(deck) },
@@ -35,18 +39,17 @@ export async function composeLessonSlide(
 
 export function composeDraft(item:OutlineItem,draft:LessonSlideDraft,illustration?:SlideImage):Partial<Slide> {
   const { title, body, notes, eyebrow, takeaway, cards, numbered, answer, table, chart, diagram } = draft;
-  const design = eyebrow || takeaway || cards?.length ? {
-    theme: 'deck' as const, eyebrow, takeaway, cards,
-    ...(cards?.length && numbered && { numbered:true }),
+  const layout = fitGeneratedLayout(item.layout, { title, body, chart, table, diagram, image:illustration });
+  const hasPrimaryVisual = Boolean(table || chart || diagram || illustration);
+  const projectedCards = hasPrimaryVisual ? undefined : cards;
+  const design = eyebrow || takeaway || projectedCards?.length ? {
+    theme: 'deck' as const, eyebrow, takeaway, cards:projectedCards,
+    ...(projectedCards?.length && numbered && { numbered:true }),
   } : undefined;
-  const slide = { title, body, notes, ...(answer && {answer}), ...(design && {design}) };
-  if (table) return { ...slide, layout:'native-table', table };
-  if (chart) return { ...slide, layout:'data-chart', chart };
-  if (diagram) return { ...slide, layout:item.layout, diagram };
-
-  const needsImage = item.layout.startsWith('image-') || item.layout === 'avatar-right';
-  const needsData = item.layout === 'native-table' || item.layout === 'data-chart';
-  const layout = (needsImage && !illustration) || needsData ? 'body' : item.layout;
-
+  const lectureNotes = hasPrimaryVisual && cards?.length ? [notes, ...cards.map(card => `${card.title}\n${card.text}`)].join('\n\n') : notes;
+  const slide = { title, body, notes:lectureNotes, ...(answer && {answer}), ...(design && {design}) };
+  if (layout === 'native-table' && table) return { ...slide, layout, table };
+  if (layout === 'data-chart' && chart) return { ...slide, layout, chart };
+  if (diagram) return { ...slide, layout, diagram };
   return { ...slide, layout, ...(illustration && { image:illustration }) };
 }

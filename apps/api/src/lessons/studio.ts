@@ -15,7 +15,8 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import { makeFixtureDeck } from '@sabaq/lesson/fixture';
 import type { CreateInput, Deck, EditOp, OutlineItem, Proposal, Revision, Slide, SlideImage, Theme } from '@sabaq/lesson/types';
 import { minGeneratedSlides } from '@sabaq/lesson/types';
-import { generateOutline, hasAlem } from '../authoring/alem';
+import { hasAlem } from '../authoring/alem';
+import { generateOutline } from '../authoring/generate-outline';
 import { composeLessonSlide } from '../authoring/compose';
 import { applyImageMode, requestedImageMode } from '../authoring/image-mode';
 import { blankSlide, excerpts, fixtureOutline, fixtureProposal, fixtureSlide } from '../authoring/lessons';
@@ -23,7 +24,8 @@ import { plannedLessonMinutes, slideCountFor } from '../authoring/slide-count';
 import { completeBrief, completeAssessment, configuredSpeechProfile } from '../authoring/lesson-brief';
 import { StudioStore } from '../persistence/storage';
 import { runGenerationStep } from '../authoring/generation-retry';
-import { researchCapabilities, researchDocument, researchOutline, researchSlide, retrievePublicSources } from '../authoring/research';
+import { researchCapabilities, researchDocument, researchOutline, researchPassages, researchSlide, retrieveLessonWebResearch, retrievePublicSources } from '../authoring/research';
+import { exaResearchAvailable, WebResearchError } from '../research/exa';
 
 type Run = {
   id: string;
@@ -42,6 +44,7 @@ type EditReceipt = { op: EditOp; revision?: number };
 type RestoreIntent = 'undo' | 'redo' | 'restore';
 type RestoreReceipt = { signature: string; revision: number };
 const now = () => new Date().toISOString();
+const themeRevisionReason = 'Theme change';
 function getSlide(deck: Deck, id: string) {
   const slide = deck.slides.find((s) => s.id === id);
   if (!slide) throw new ApiError(404, 'Slide not found.', deck);
@@ -111,7 +114,7 @@ export class Studio {
     deck.revision++;
     deck.updatedAt = now();
     this.store.saveRevision(deck, reason);
-    if (reason==='Teacher edit' || reason==='Assistant edits applied' || reason==='Assistant proposal applied')
+    if (reason==='Teacher edit' || reason===themeRevisionReason || reason==='Assistant edits applied' || reason==='Assistant proposal applied')
       this.store.usage.deckEvent(deck,'edit','once');
     if ((reason==='Assistant edits applied' || reason==='Assistant proposal applied') && typeof data.proposalId==='string') {
       const ref=(reason==='Assistant edits applied' ? 'chat-' : 'rewrite-')+data.proposalId;
@@ -142,9 +145,11 @@ export class Studio {
       if (deck.theme === snapshot.theme) for (const inspected of result.slides) {
         const current = deck.slides.find(slide => slide.id === inspected.id);
         if (!current || current.version !== inspected.version) continue;
-        if (JSON.stringify([current.title, current.layout, current.image?.alt, current.additionalImages?.map(image=>image.alt), current.chart?.alt]) !==
+        if (current.body !== inspected.body || current.notes !== inspected.notes ||
+            JSON.stringify([current.title, current.layout, current.image?.alt, current.additionalImages?.map(image=>image.alt), current.chart?.alt]) !==
             JSON.stringify([inspected.title, inspected.layout, inspected.image?.alt, inspected.additionalImages?.map(image=>image.alt), inspected.chart?.alt])) {
           current.title = inspected.title; current.layout = inspected.layout;
+          current.body = inspected.body; current.notes = inspected.notes;
           if (current.image && inspected.image) current.image.alt = inspected.image.alt;
           if (inspected.additionalImages) current.additionalImages = inspected.additionalImages;
           if (current.chart && inspected.chart) current.chart.alt = inspected.chart.alt;
@@ -168,6 +173,12 @@ export class Studio {
         return this.deck(previous.deck);
       }
     }
+    if (input.webResearch) {
+      if (input.source || input.sourceDeckId || input.researchQuery || input.template === 'blank')
+        throw new ApiError(400, 'Use a standalone public topic for web research.');
+      if (input.provider !== 'alem') throw new ApiError(400, 'Web research for lesson generation requires AlemLLM.');
+      if (!exaResearchAvailable()) throw new ApiError(503, 'Web research is unavailable.');
+    }
     if (input.sourceDeckId) {
       const sourceDeck = this.deck(input.sourceDeckId);
       if (input.source || !sourceDeck.source || sourceDeck.research) throw new ApiError(400, 'Select one saved source.');
@@ -183,6 +194,8 @@ export class Studio {
     const {ownImage: _ownImage, ...answers} = input.answers ?? {};
     const themeRecommendation = input.template === 'blank' || input.powerPointStyle ? undefined :
       recommendLessonTheme(input.topic, isTemplate(input.template) ? lessonTemplates[input.template].theme : undefined);
+    const research:Deck['research'] = input.webResearch ? {query:input.topic, mode:input.webResearch}
+      : input.researchQuery ? {query:input.researchQuery} : undefined;
     const d: Deck = {
       id: randomUUID(),
       topic: input.topic,
@@ -205,7 +218,7 @@ export class Studio {
       slides: [],
       outline: [],
       source: input.source,
-      ...(input.researchQuery && { research: { query: input.researchQuery } }),
+      ...(research && { research }),
       template: input.template,
       updatedAt: now(),
     };
@@ -239,7 +252,7 @@ export class Studio {
       stage: 'outline',
       review: input.review,
       count: count ?? 0,
-      ...(input.researchQuery && count !== undefined && { researchSlideCount:count }),
+      ...(research && count !== undefined && { researchSlideCount:count }),
       answers: input.answers && answers,
     };
     this.store.transaction(() => {
@@ -282,7 +295,7 @@ export class Studio {
     const worker = this.work(run, c.signal)
       .catch((error) => {
         if (this.store.get<Run>('runs', run.id)?.active)
-          this.endRun(run, 'failed', error instanceof ModerationError ? error.message : 'The generation step failed. Please retry.', error instanceof ModerationError);
+          this.endRun(run, 'failed', error instanceof ModerationError || error instanceof WebResearchError ? error.message : 'The generation step failed. Please retry.', error instanceof ModerationError);
       })
       .finally(() => {
         this.controllers.delete(run.id);
@@ -297,12 +310,14 @@ export class Studio {
     let d = this.deck(run.deckId);
     if (run.stage === 'outline') {
       if (d.research && !d.research.sources) {
-        const query = d.research.query;
-        const sources = await runGenerationStep(()=>retrievePublicSources(query,signal),signal);
+        const {query, mode} = d.research;
+        const retrieved = mode ? await retrieveLessonWebResearch(query,mode,d.language,signal)
+          : {sources:await runGenerationStep(()=>retrievePublicSources(query,signal),signal)};
+        if (mode) await requireSuitable(retrieved,d.language,'output',signal);
         if (!this.current(run)) return;
         d = this.deck(run.deckId);
-        d.research = { query: d.research!.query, sources };
-        d.source = researchDocument(d.language, sources);
+        d.research = { ...d.research!, ...retrieved };
+        d.source = researchDocument(d.language, retrieved.sources);
         this.store.transaction(() => this.save(d, 'Public sources retrieved', 'outline', { runId: run.id }));
       }
       let outline: OutlineItem[];
@@ -316,7 +331,8 @@ export class Studio {
           run.answers,
           d.template,
           d.provider === 'local' ? generateLocal : undefined,
-          d.provider === 'local' && d.source ? excerpts(d.source,d.language) : undefined,
+          d.research?.sources ? researchPassages(d.research.sources) :
+            d.provider === 'local' && d.source ? excerpts(d.source,d.language) : undefined,
         ),signal);
         const pending = this.store.get<Run>('runs', run.id);
         if (!pending?.active) return;
@@ -383,7 +399,7 @@ export class Studio {
       try {
         await sleep(this.delay, undefined, { signal });
         result =
-          d.provider === 'local' && d.source
+          d.provider === 'local' && d.source || d.provider === 'alem' && d.research?.sources?.length
             ? await runGenerationStep(()=>groundedSlide(this.store,d,item,index,run.answers,signal),signal)
             : d.provider !== 'fixture'
             ? await runGenerationStep(()=>composeLessonSlide(d, item, index, {
@@ -551,10 +567,11 @@ export class Studio {
       }
       if (baseRevision !== undefined && baseRevision !== d.revision && op.kind !== 'slide')
         throw new ApiError(409, 'Lesson revision changed.', d);
+      const previousTheme = d.theme;
       this.applyOperation(d, op);
       this.save(
         d,
-        'Teacher edit',
+        d.theme === previousTheme ? 'Teacher edit' : themeRevisionReason,
         op.kind === 'outline' ? 'outline' : 'slide',
         op.kind === 'slide' ? { slideId: op.slideId } : {},
       );
@@ -613,7 +630,7 @@ export class Studio {
     await requireSuitable(instruction,d.language,'instruction');
     let after = fixtureProposal(before, d.language, instruction);
     if (d.provider === 'alem' && !d.source) {
-      const { reviseSlide } = await import('../authoring/alem');
+      const { reviseSlide } = await import('../authoring/generate-slide');
       const changes = await reviseSlide(d.language, before, instruction);
       after = { ...structuredClone(before), ...changes };
       delete after.richText;
@@ -657,13 +674,19 @@ export class Studio {
   }
   revisions(id: string): Revision[] {
     this.deck(id);
-    return this.store.db
+    const revisions = this.store.db
       .prepare('SELECT data,reason FROM revisions WHERE deck_id=? ORDER BY revision DESC')
       .all(id)
       .map((row) => {
         const d = JSON.parse(String(row.data)) as Deck;
         return { revision: d.revision, at: d.updatedAt, reason: String(row.reason), deck: d };
       });
+    return revisions.map((current, index) => {
+      const previous = revisions[index + 1];
+      if (current.reason === 'Teacher edit' && previous?.revision === current.revision - 1 && previous.deck.theme !== current.deck.theme)
+        return { ...current, reason: themeRevisionReason };
+      return current;
+    });
   }
   restore(id: string, rev: number, baseRevision?: number, intent: RestoreIntent = 'restore', operationId?: string) {
     if (intent === 'restore') return this.restoreSnapshot(id, rev, baseRevision, intent, operationId);

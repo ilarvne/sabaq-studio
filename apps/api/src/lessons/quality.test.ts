@@ -124,6 +124,37 @@ test('unknown or regressive geometry preserves the original layout and reports t
   assert.deepEqual(failed.reports[slide.id].issues, ['empty-content']);
 });
 
+test('readable-fit repair preserves verbatim Kazakh facts and skips authored or regressive changes', async () => {
+  const deck = makeFixtureDeck('kk');
+  const lead = 'Екі өлшемді салыстырыңыз.';
+  const detail = 'Бірінші ыдыста 12,5 мл су бар. Екінші ыдыста 27 мл су бар.';
+  const seed = { ...deck.slides[0], layout: 'centered' as const, image: undefined, design: undefined,
+    body: lead + ' ' + detail, notes: 'Тәжірибе туралы сұраңыз.',
+  };
+  deck.slides = [
+    { ...seed, id: 'generated' },
+    { ...seed, id: 'teacher' },
+    { ...seed, id: 'contrast' },
+    { ...seed, id: 'formatted', bodyRuns: [{ text: seed.body, bold: true }] },
+  ];
+  const tested: string[] = [];
+  const result = await reviewSlides(deck, roots, { generated: seed.version, contrast: seed.version, formatted: seed.version }, signal(), async sample =>
+    Object.fromEntries(sample.slides.map(slide => {
+      if (slide.body !== lead) return [slide.id, ['overflow'] as QualityIssue[]];
+      tested.push(slide.id);
+      return [slide.id, slide.id === 'contrast' ? ['contrast'] : []];
+    })));
+  assert.deepEqual(tested, ['generated', 'contrast']);
+  assert.equal(result.slides[0].body, lead);
+  assert.equal(result.slides[0].notes, seed.notes + '\n\n' + detail);
+  assert.deepEqual(result.reports.generated.issues, []);
+  for (const slide of result.slides.slice(1)) {
+    assert.equal(slide.body, seed.body);
+    assert.equal(slide.notes, seed.notes);
+    assert.deepEqual(result.reports[slide.id].issues, ['overflow']);
+  }
+});
+
 test('generation schedules a deck review, skips intervening edits and persists a verified repair', async () => {
   const store = new StudioStore(':memory:');
   let entered!: () => void, proceed!: () => void;
@@ -153,5 +184,38 @@ test('generation schedules a deck review, skips intervening edits and persists a
     assert.equal(checked.slides[1].layout, 'stacked');
     assert.equal(checks, 2);
     assert.ok(studio.revisions(deck.id).some(item => item.reason === 'Generated slide quality repairs'));
+  } finally { proceed?.(); await studio.close(); }
+});
+
+test('compacted body and notes save together while a concurrent teacher revision wins', async () => {
+  const store = new StudioStore(':memory:');
+  let measured!: () => void, proceed!: () => void;
+  const started = new Promise<void>(resolve => { measured = resolve; });
+  const pending = new Promise<void>(resolve => { proceed = resolve; });
+  const lead = 'Measure the specimen.';
+  const fact = 'The length is 12 mm.';
+  const studio = new Studio(store, 0, roots.generated, async sample => {
+    if (sample.slides.some(slide => slide.body === lead)) {
+      measured();
+      await pending;
+    }
+    return Object.fromEntries(sample.slides.map(slide => [slide.id, slide.body === lead ? [] : ['overflow'] as QualityIssue[]]));
+  });
+  try {
+    const deck = studio.create({ topic: lead + ' ' + fact, language: 'en', provider: 'fixture', review: false, slideCount: 3 });
+    await Promise.race([started, delay(3000).then(() => { throw new Error('The text repair was not measured.'); })]);
+    const [first, second] = studio.deck(deck.id).slides;
+    studio.edit(deck.id, { kind: 'slide', slideId: first.id, baseVersion: first.version,
+      changes: { body: 'Independent worksheet instructions.', notes: 'Teacher notes.' },
+    });
+    proceed();
+    for (let n = 0; n < 200 && studio.deck(deck.id).qualityReview?.state === 'pending'; n++) await delay(5);
+    const checked = studio.deck(deck.id);
+    assert.equal(checked.qualityReview?.state, 'reviewed');
+    assert.equal(checked.slides[0].body, 'Independent worksheet instructions.');
+    assert.equal(checked.slides[0].notes, 'Teacher notes.');
+    assert.equal(checked.slides[1].body, lead);
+    assert.ok(checked.slides[1].notes.includes(fact));
+    assert.equal(checked.slides[1].version, second.version + 1);
   } finally { proceed?.(); await studio.close(); }
 });

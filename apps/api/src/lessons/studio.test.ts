@@ -5,8 +5,21 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import type { Deck, Slide } from '@sabaq/lesson/types';
+import { brandContrast, recommendLessonTheme, themePresets } from '@sabaq/lesson/themes';
 import { createStudioServer } from '../app';
 import { StudioStore } from '../persistence/storage';
+
+test('strategy and data topics get distinct high-contrast themes', () => {
+  assert.deepEqual(recommendLessonTheme('Шахматы. Инопланетный гамбит'), { theme: 'strategy', reason: 'strategy' });
+  assert.deepEqual(recommendLessonTheme('Деректерді талдау'), { theme: 'signal', reason: 'data' });
+  assert.deepEqual(recommendLessonTheme('An introductory workshop', undefined, 'strategy'), { theme: 'strategy', reason: 'model' });
+  assert.deepEqual(recommendLessonTheme('Chess tactics', 'blueprint'), { theme: 'blueprint', reason: 'template' });
+  for (const theme of ['strategy', 'signal'] as const) {
+    const {paper, ink, accent} = themePresets[theme];
+    assert.ok(brandContrast(paper,ink) >= 4.5);
+    assert.ok(brandContrast(paper,accent) >= 4.5);
+  }
+});
 
 test('an automatically selected literature theme includes a reason and allows a teacher override', async t => {
   const app = createStudioServer({ dbPath: ':memory:', fixtureDelay: 12 });

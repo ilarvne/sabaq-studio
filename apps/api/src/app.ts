@@ -198,7 +198,7 @@ export function createStudioServer(
     if (input.template!=='blank') {
       const source = input.source ?? (input.sourceDeckId ? studio.deck(input.sourceDeckId).source : undefined);
       const illustration = ownImage && {alt:ownImage.alt, digest:createHash('sha256').update(ownImage.data).digest('hex')};
-      await checkCreation({topic:input.topic,source,settings,illustration,template:input.template,research:input.researchQuery},
+      await checkCreation({topic:input.topic,source,settings,illustration,template:input.template,research:input.researchQuery,webResearch:input.webResearch},
         input.language,input.moderationConfirmation);
     }
     const ownIllustration = ownImage ? {

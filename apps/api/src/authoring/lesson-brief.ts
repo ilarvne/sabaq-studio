@@ -1,5 +1,7 @@
 import type {CreateInput, Deck, OutlineItem, Slide, SpeechProfile} from '@sabaq/lesson/types';
 import {z} from 'zod';
+import { eligibleForIllustration, planIllustratedOutline, requestedImageMode } from './image-mode';
+import { isImageLayout, planOutlineLayouts } from './layout-planner';
 
 const labels={
   en:{image:'An illustration showing',check:'Check your understanding',question:(topic:string)=>`Which example illustrates ${topic}, and why?`,summary:'Lesson summary',recall:(topic:string)=>`Summarize what we learned about ${topic}.`,answer:'Explain your reasoning and support it with an example from the lesson.'},
@@ -9,11 +11,14 @@ const labels={
 
 export function completeBrief(deck:Deck,items:OutlineItem[],answers?:CreateInput['answers']):OutlineItem[] {
   const t=labels[deck.language];
+  const mode = requestedImageMode(deck.imageMode, answers);
+  const allowImages = deck.imageSource !== 'none' && mode !== 'none';
+  const direction = answers?.imageInstruction?.trim();
   const isAssessment = (item:OutlineItem) => item.assessment || item.role === 'reflection' ||
     /check your understanding|assessment|quiz|контрольн.*вопрос|вопрос для проверки|бақылау сұра|тексеру сұра/iu.test(item.title);
   const candidate=items.findIndex(isAssessment);
   const checkIndex=candidate >= 0 ? candidate : items.length - 1;
-  return items.map((original,index)=>{
+  const brief = items.map((original,index)=>{
     let item=original;
     if(answers?.quiz==='include' && index===checkIndex) {
       const question=answers.quizInstruction?.trim();
@@ -25,13 +30,23 @@ export function completeBrief(deck:Deck,items:OutlineItem[],answers?:CreateInput
       const summary=t.recall(deck.topic);
       item={...item,title:t.summary,summary,purpose:summary,narrationDraft:summary,assessment:false};
     }
-    const direction=answers?.imageInstruction?.trim();
-    const requestedVisual = item.visualDescription || (deck.imageMode==='illustrated' || deck.imageMode==='image-led' ? t.image+' «'+item.title+'».' : undefined);
-    const visualDescription=deck.imageSource==='none' || deck.imageMode==='none' ? undefined : deck.imageSource==='own'
+    const eligible = allowImages && eligibleForIllustration(item);
+    const visualDescription=!eligible ? undefined : deck.imageSource==='own'
       ? index===0 ? deck.ownIllustration?.alt || undefined : undefined
-      : [requestedVisual,direction].filter(Boolean).join(' ').slice(0,400) || undefined;
-    return {...item,visualDescription,
+      : [item.visualDescription,mode==='auto' ? direction : undefined].filter(Boolean).join(' ').slice(0,400) || undefined;
+    const imageScenes = eligible && deck.imageSource !== 'own' && item.layout==='image-grid' ? item.imageScenes : undefined;
+    return {...item,visualDescription,imageScenes,
       narrationDraft:item.narrationDraft ?? item.summary};
+  });
+  const layouts = deck.provider === 'fixture' || deck.powerPointStyle ? brief
+    : planOutlineLayouts(brief, index => allowImages && (deck.imageSource !== 'own' || index === 0 && !!deck.ownIllustration),
+      mode === 'auto' && deck.imageSource !== 'own' && !direction);
+  if (!allowImages || deck.imageSource==='own' || (mode!=='illustrated' && mode!=='image-led')) return layouts;
+  return planIllustratedOutline(layouts,mode).map((item,index)=>{
+    if (!eligibleForIllustration(item) || (!isImageLayout(item.layout) && !(index===0 && item.layout==='cover'))) return item;
+    // The gallery already has a scene for each frame. The optional brief adjusts all of them.
+    const scene = item.visualDescription || (item.imageScenes?.length ? undefined : t.image+' «'+item.title+'».');
+    return {...item,visualDescription:[scene,direction].filter(Boolean).join(' ').slice(0,400) || undefined};
   });
 }
 

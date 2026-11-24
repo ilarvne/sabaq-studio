@@ -5,9 +5,9 @@ import type { Deck } from '@sabaq/lesson/types';
 import { createStudioServer } from '../app';
 import { fixtureOutline } from './lessons';
 
-test('the school catalog offers 20 distinct teaching structures in all three languages',()=>{
-  assert.equal(templateIds.length,20);
-  assert.equal(new Set(templateIds.map(id=>lessonTemplates[id].steps.join(','))).size,20);
+test('the school catalog offers 23 distinct teaching structures in all three languages',()=>{
+  assert.equal(templateIds.length,23);
+  assert.equal(new Set(templateIds.map(id=>lessonTemplates[id].steps.join(','))).size,templateIds.length);
   for (const locale of ['en','ru','kk'] as const) {
     const topics=new Set<string>();
     for (const id of templateIds) {
@@ -25,7 +25,7 @@ test('the school catalog offers 20 distinct teaching structures in all three lan
         assert.ok(plan.every(item=>item.summary.length>10));
       }
     }
-    assert.equal(topics.size,20);
+    assert.equal(topics.size,templateIds.length);
   }
   assert.ok(matchingTemplates('arts',1).includes('music'));
   assert.ok(!matchingTemplates('arts',1).includes('critique'));
@@ -37,10 +37,15 @@ test('catalog filters, custom preview, sourced structure and created deck share 
   t.after(()=>app.close());
   const topic='Городской сад';
   const entries=(await app.inject({url:'/api/lesson-templates?language=ru&subject=technology&grade=4&topic='+encodeURIComponent(topic)})).json();
-  assert.deepEqual(entries.map((entry:{id:string})=>entry.id),['engineering','debugging']);
+  assert.deepEqual(entries.map((entry:{id:string})=>entry.id),['engineering','debugging','projectBrief']);
   assert.equal(entries[0].plan[0].title,topic);
   const deck=(await app.inject({url:'/api/decks',method:'POST',payload:{topic,language:'ru',provider:'fixture',template:'engineering',review:true}})).json<Deck>();
   assert.equal(deck.theme,'blueprint');
+  const project=(await app.inject({url:'/api/decks',method:'POST',payload:{
+    topic,language:'ru',provider:'fixture',template:'projectBrief',review:true,
+  }})).json<Deck>();
+  assert.equal(project.theme,'spotlight');
+  assert.equal((await app.inject('/api/decks/'+project.id)).json<Deck>().theme,'spotlight');
   const source={name:'Полевой журнал',text:'Во дворе растут яблони. Ученики составили план посадок.'};
   const plan=fixtureOutline({topic,language:'ru',source,template:'engineering'},7);
   assert.ok(plan.every(item=>item.sourceExcerptId));

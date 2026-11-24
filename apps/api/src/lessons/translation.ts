@@ -32,6 +32,8 @@ function slots(deck: Deck, onlySlides?: Set<string>) {
     for (const field of ['purpose','section'] as const) add(`outline.${item.id}.${field}`,item[field],field==='purpose'?400:160,text=>{item[field]=text;});
     if (onlySlides && !onlySlides.has(item.id)) continue;
     for (const field of ['visualDescription','narrationDraft'] as const) add(`outline.${item.id}.${field}`,item[field],field==='visualDescription'?400:2500,text=>{item[field]=text;});
+    const gallery=item.imageScenes;
+    gallery?.forEach((scene,index)=>add(`outline.${item.id}.imageScenes.${index}`,scene,400,text=>{gallery[index]=text;}));
     for (const field of ['title','summary'] as const) add(`outline.${item.id}.${field}`,item[field],1000,text=>{item[field]=text;});
   }
   for (const slide of deck.slides) {
@@ -57,6 +59,9 @@ function slots(deck: Deck, onlySlides?: Set<string>) {
     }
     put('notes',slide.notes,10000,text=>{slide.notes=text;});
     put('answer',slide.answer,1000,text=>{slide.answer=text;});
+    for (const object of slide.objects ?? []) {
+      if (object.kind === 'text') put(`object.${object.id}`,object.text,600,text=>{object.text=text;});
+    }
     if (slide.image) put('image.alt',slide.image.alt,1000,text=>{slide.image!.alt=text;});
     slide.additionalImages?.forEach((image,i)=>put(`additionalImage.${i}.alt`,image.alt,1000,text=>{image.alt=text;}));
     const design = slide.design;

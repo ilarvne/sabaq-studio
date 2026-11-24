@@ -23,7 +23,7 @@ export function plannedLessonMinutes(input:Pick<CreateInput,'topic'|'answers'>) 
   return Number.isFinite(minutes) && minutes>0 && minutes<Number.MAX_SAFE_INTEGER/60 ? minutes : undefined;
 }
 
-/** Research with no length instruction uses one evidence slide per retrieved source. */
+/** Legacy fixture research with no length instruction uses one slide per retrieved source. */
 export function slideCountFor(input: CreateInput): number | undefined {
   if (input.template === 'blank' && input.slideCount === undefined) return 1;
   const fromTopic = input.topic.match(/(?<![\p{L}\d.,])(\d+)\s*[-–]?\s*(?:slides?\b|слайд[\p{L}]*)/iu);

@@ -42,7 +42,7 @@ test('a reviewed Alem plan drives themed layouts, semantic content and local ill
         ...(input.slide === 4 && { illustration:{asset:'kindness-notebooks'} }),
         ...(input.slide === 5 && { answer:'Ask what would be helpful.' }),
         ...(input.slide === 6 && { chart:{categories:['Monday','Tuesday'],series:[{name:'Observations',values:[3,6]}],alt:'Three observations on Monday and six on Tuesday.'} }),
-        ...(input.slide === 7 && { diagram:{kind:'process',nodes:['Listen','Offer help','Ask how it went']} }),
+        ...(input.slide === 7 && { eyebrow:'Working together', diagram:{kind:'process',nodes:['Listen','Offer help','Ask how it went']} }),
       };
     }
     return Response.json({ choices: [{ message: { content: JSON.stringify(output) } }] });
@@ -97,6 +97,16 @@ test('a reviewed Alem plan drives themed layouts, semantic content and local ill
   assert.equal(finished.slides[4].answer,'Ask what would be helpful.');
   assert.equal(finished.slides[4].body,'What would you do?');
   assert.deepEqual(finished.slides[5].chart?.series[0].values,[3,6]);
-  assert.equal(finished.slides[6].diagram?.kind,'process');
+  const generatedDiagram = finished.slides[6];
+  assert.equal(generatedDiagram.diagram?.kind,'process');
   assert.equal(finished.slides.filter(slide=>slide.image).length,1);
+
+  const diagram = {...generatedDiagram.diagram!,nodes:['Listen carefully','Offer help','Ask how it went']};
+  const updated = await app.inject({method:'PATCH',url,payload:{op:{kind:'slide',slideId:generatedDiagram.id,
+    baseVersion:generatedDiagram.version,changes:{diagram},
+  }}});
+  assert.equal(updated.statusCode,200,updated.body);
+  const savedDiagram = updated.json<Deck>().slides[6];
+  assert.deepEqual(savedDiagram.diagram,diagram);
+  assert.equal(savedDiagram.design?.eyebrow,'Working together');
 });

@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { GenerationHttpError } from './generation-retry';
 import { allowedProviderEndpoint } from '../access/provider-origins';
 import { isTemplate, templatePlan } from '@sabaq/lesson/lesson-templates';
-import type { Deck, Locale, OutlineItem, ResearchSource, Slide, SourceExcerpt } from '@sabaq/lesson/types';
+import type { Deck, Locale, OutlineItem, ResearchSource, Slide, SourceExcerpt, WebResearchMode } from '@sabaq/lesson/types';
+import { searchExa, WebResearchError } from '../research/exa';
 
 const copy = {
   en: { source: 'Public sources', opening: 'Read the sources and identify the main question.', closing: 'Compare the evidence', question: 'Which source best supports your conclusion? Explain your choice.' },
@@ -15,6 +16,11 @@ const defaultTopics = [
   'Круговорот воды в природе', 'Прорастание семян растений',
   'Табиғаттағы су айналымы', 'Өсімдік тұқымының өнуі',
 ];
+const noExcerpt = {
+  en:'The web search found no citable excerpts. Try a more specific topic.',
+  ru:'Поиск не нашёл цитируемых фрагментов. Попробуйте уточнить тему.',
+  kk:'Веб іздеуде дәйексөз келтіруге болатын үзінділер табылмады. Тақырыпты нақтылап көріңіз.',
+};
 
 // Only the operator's public vocabulary can cross the search boundary.
 export function researchCapabilities() {
@@ -62,10 +68,26 @@ export async function retrievePublicSources(query: string, signal: AbortSignal):
   return results;
 }
 
+export async function retrieveLessonWebResearch(query: string, mode: WebResearchMode, locale: Locale, signal: AbortSignal) {
+  const result = await searchExa(query, mode, locale, signal);
+  const sources = result.sources.flatMap(source => source.excerpt ? [{ ...source, excerpt:source.excerpt }] : []);
+  if (!sources.length) throw new WebResearchError(noExcerpt[locale]);
+  return {sources};
+}
+
 export function researchDocument(locale: Locale, sources: ResearchSource[]) {
   return { name: copy[locale].source, text: sources.map(source => source.excerpt).join('\n\n') };
 }
-export function researchOutline(deck: Deck, sources: ResearchSource[], count = sources.length + 2): OutlineItem[] {
+export function researchPassages(sources: ResearchSource[]): SourceExcerpt[] {
+  let start = 0;
+  return sources.map(({id,title,url,excerpt}) => {
+    const end = start + [...excerpt].length;
+    const passage = {id,source:title,url,start,end,excerpt};
+    start = end + 2;
+    return passage;
+  });
+}
+export function researchOutline(deck: Deck, sources: ResearchSource[], count = (deck.research?.findings?.length || sources.length) + 2): OutlineItem[] {
   const t = copy[deck.language];
   const opening:OutlineItem = { id:'web-opening', title:deck.topic, summary:t.opening, purpose:t.opening, layout:'cover' };
   if (count <= 2) opening.sourceExcerptId = sources[0]?.id;
@@ -73,6 +95,12 @@ export function researchOutline(deck: Deck, sources: ResearchSource[], count = s
   const structure = templatePlan(isTemplate(deck.template) ? deck.template : 'archive', deck.language, deck.topic, count);
   const body = structure.slice(1,-1).map((stage, index):OutlineItem => {
     const source = sources[index % sources.length];
+    const finding = deck.research?.findings?.[index];
+    if (finding) {
+      const primary = sources.find(item => item.id === finding.sourceIds[0]);
+      return { id:finding.id, title:finding.heading || primary?.title || source.title, summary:finding.statement,
+        purpose:finding.statement.slice(0,400), layout:'body' };
+    }
     return index < sources.length
       ? { id:source.id, title:source.title, summary:source.excerpt, purpose:source.excerpt.slice(0,400), layout:'quote' }
       : { ...stage, id:'web-activity-' + (index + 1), sourceExcerptId:source.id };
@@ -81,14 +109,12 @@ export function researchOutline(deck: Deck, sources: ResearchSource[], count = s
 }
 export function researchSlide(deck: Deck, item: OutlineItem): Partial<Slide> {
   const sources = deck.research?.sources ?? [];
-  let start = 0;
-  for (const source of sources) {
-    const end = start + [...source.excerpt].length;
-    if ((item.sourceExcerptId ?? item.id) === source.id) {
-      const evidence: SourceExcerpt = { id: source.id, source: source.title, url: source.url, start, end, excerpt: source.excerpt };
-      return { title: item.title, body: item.summary, evidence: [evidence], notes: source.excerpt + '\n\n' + source.url };
-    }
-    start = end + 2;
+  const finding = deck.research?.findings?.find(({id}) => id === item.id);
+  const ids = new Set(finding?.sourceIds ?? [item.sourceExcerptId ?? item.id]);
+  const evidence = researchPassages(sources).filter(source => ids.has(source.id));
+  if (evidence.length) {
+    const notes = [finding ? item.summary : evidence[0].excerpt, ...evidence.map(item => item.url)].join('\n\n');
+    return { title:item.title, body:item.summary, evidence, notes };
   }
   return { title: item.title, body: item.summary, notes: item.summary };
 }

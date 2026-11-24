@@ -15,6 +15,8 @@ test('history rolls back manual edits, themes and assistant batches with stable,
   const editId = randomUUID();
   const manual = studio.editWithReceipt(deckId, op, editId);
   const theme = studio.edit(deckId, { kind: 'deck', theme: 'blueprint' }, randomUUID());
+  assert.equal(studio.revisions(deckId).find(item => item.revision === theme.revision)?.reason, 'Theme change');
+  assert.equal(studio.revisions(deckId).find(item => item.revision === manual.deck.revision)?.reason, 'Teacher edit');
   const newSlideId = randomUUID();
   const batch = [{ kind: 'duplicate' as const, slideId: slide.id, newSlideId }];
   const preview = studio.previewAssistantBatch(theme, batch);

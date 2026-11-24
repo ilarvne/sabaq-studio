@@ -1,4 +1,4 @@
-import type { Locale, Theme } from './types';
+import type { Layout, Locale, Theme } from './types';
 
 // The tuple order matches the three authored editions of each lesson move.
 const tr = (en:string,ru:string,kk:string) => ({en,ru,kk});
@@ -165,12 +165,44 @@ export const lessonTemplates = {
     tr('Clap a short pattern twice. Change one beat, then ask a partner to identify and reproduce the change.','Дважды прохлопайте короткий рисунок. Измените одну долю и попросите напарника воспроизвести изменение.','Қысқа ырғақты екі рет шапалақтаңыз. Бір соққыны өзгертіп, серіктесіңізден өзгерісті қайталауын сұраңыз.'),
     'arts',1,8,'editorial',['listen','record','compare','perform','peer'],
   ),
+  fieldJournal: template(
+    tr('Field journal','Полевой дневник','Дала күнделігі'),
+    tr('How does shade affect the schoolyard?','Как тень влияет на школьный двор?','Көлеңке мектеп ауласына қалай әсер етеді?'),
+    tr('Measure two places, compare the conditions, and explain one result with evidence.',
+      'Проведите измерения в двух местах, сравните условия и обоснуйте один вывод.',
+      'Екі жерде өлшеу жүргізіңіз, жағдайларды салыстырыңыз және бір нәтижені дәлелмен түсіндіріңіз.'),
+    'science',3,11,'field-notes',['observe','measure','record','compare','evidence'],
+  ),
+  visualStudy: template(
+    tr('Visual comparison','Визуальное сравнение','Көрнекі салыстыру'),
+    tr('How do two posters tell different stories?','Как два плаката рассказывают разные истории?','Екі плакат әртүрлі оқиғаны қалай баяндайды?'),
+    tr('Compare the hierarchy, framing, and colour in two posters. Sketch a new composition and exchange feedback.',
+      'Сравните иерархию, кадрирование и цвет двух плакатов. Набросайте новую композицию и обменяйтесь отзывами.',
+      'Екі плакаттың иерархиясын, жиектемесін және түсін салыстырыңыз. Жаңа композиция нобайын жасап, пікір алмасыңыз.'),
+    'arts',3,11,'collage',['observe','compare','annotate','design','peer'],
+  ),
+  projectBrief: template(
+    tr('Project pitch','Презентация проекта','Жобаны таныстыру'),
+    tr('Make our school courtyard more inviting','Как сделать школьный двор уютнее?','Мектеп ауласын қалай жайлы етуге болады?'),
+    tr('Propose one realistic change. Support it with observations and a prototype, then defend the proposal.',
+      'Предложите одно выполнимое изменение. Подкрепите его наблюдениями и прототипом, затем защитите предложение.',
+      'Іске асыруға болатын бір өзгеріс ұсыныңыз. Оны бақылаулармен және үлгімен негіздеп, ұсынысты қорғаңыз.'),
+    'technology',4,11,'spotlight',['claim','evidence','design','test','defend'],
+  ),
 };
 export type TemplateId = keyof typeof lessonTemplates;
 export const templateIds = Object.keys(lessonTemplates) as TemplateId[];
 export function isTemplate(id:unknown):id is TemplateId {
   return typeof id==='string' && Object.hasOwn(lessonTemplates,id);
 }
+
+const stageLayouts = {
+  open: 'cover', predict: 'centered', measure: 'stacked', record: 'stacked', compare: 'split', define: 'body',
+  model: 'stacked', apply: 'centered', recall: 'quote', diagnose: 'split', criteria: 'stacked', perform: 'stacked',
+  check: 'centered', listen: 'split', decide: 'centered', claim: 'quote', evidence: 'split', defend: 'centered',
+  annotate: 'split', draft: 'stacked', peer: 'centered', revise: 'split', classify: 'split', source: 'body',
+  order: 'stacked', prove: 'stacked', represent: 'split', design: 'split', test: 'stacked', observe: 'body', exit: 'centered',
+} as const satisfies Record<Step, Layout>;
 
 export function templatePlan(id:TemplateId,locale:Locale,topic:string,count:number) {
   const preset=lessonTemplates[id];
@@ -188,7 +220,7 @@ export function templatePlan(id:TemplateId,locale:Locale,topic:string,count:numb
     const previous=steps.slice(0,i).filter(other=>other===key).length;
     const title=i===0 ? topic : move.title[locale]+(previous ? ' · '+(previous+1) : '');
     const task=i===0 && topic===preset.topic[locale] ? preset.scenario[locale] : move.task[locale];
-    return {title,summary:task,purpose:task,section:move.title[locale],layout:i===0 ? 'cover' as const : 'body' as const};
+    return {title,summary:task,purpose:task,section:move.title[locale],layout:stageLayouts[key]};
   });
 }
 

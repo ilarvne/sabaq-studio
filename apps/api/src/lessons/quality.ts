@@ -1,5 +1,6 @@
 import { slideImages, type Deck, type Slide } from '@sabaq/lesson/types';
 import type { QualityIssue, QualityReport } from '@sabaq/contracts/quality';
+import { coeditLimits } from '@sabaq/lesson/coedit';
 import type { MediaRoots } from '../media/powerpoint';
 import { measureSlideQuality } from '../media/render-export';
 import { catalogDescription } from '../media/visuals';
@@ -12,7 +13,8 @@ function semanticIssues(slide: Slide): QualityIssue[] {
   const images=slideImages(slide);
   if (!slide.title.trim()) issues.push('missing-title');
   const hasContent = slide.body.trim() || slide.answer?.trim() || slide.table?.rows.length || slide.chart?.categories.length ||
-    images.length || slide.diagram?.nodes.length || slide.design?.cards?.length || slide.design?.takeaway?.trim();
+    images.length || slide.diagram?.nodes.length || slide.design?.cards?.length || slide.design?.takeaway?.trim() ||
+    slide.objects?.some(object => object.kind === 'text' && object.text.trim());
   if ((!hasContent && slide.layout !== 'cover') || (slide.layout === 'native-table' && !slide.table?.rows.length) ||
       (slide.design?.cards?.some(card => !card.title.trim() || !card.text.trim())) ||
       (slide.layout === 'data-chart' && (!slide.chart?.categories.length || !slide.chart.series.length))) issues.push('empty-content');
@@ -43,6 +45,22 @@ function repairMetadata(deck: Deck, slide: Slide) {
 }
 
 const canRearrange = new Set<QualityIssue>(['overflow', 'overlap', 'contrast', 'small-type']);
+const needsReadableFit = (issues: QualityIssue[]) =>
+  issues.some(issue => issue === 'overflow' || issue === 'overlap' || issue === 'small-type');
+
+function compactBody(slide: Slide, segmenter: Intl.Segmenter): Slide | undefined {
+  if (slide.importedPage || slide.importedArtwork || slide.freeLayout || slide.objects?.length || slide.answer ||
+      slide.bodyRuns?.length || slide.richText?.body) return;
+  const segments = segmenter.segment(slide.body)[Symbol.iterator]();
+  const first = segments.next().value;
+  const next = segments.next().value;
+  if (!first || !next) return;
+  const body = first.segment.trim();
+  const detail = slide.body.slice(next.index).trim();
+  if (!/[.!?…][»”"')\]]*$/u.test(body) || !detail) return;
+  const notes = slide.notes.includes(detail) ? slide.notes : [slide.notes, detail].filter(Boolean).join('\n\n');
+  if (notes.length <= coeditLimits.notes) return { ...slide, body, notes };
+}
 
 function repeatedLayoutIds(slides: Slide[]) {
   const repeated = new Set<string>();
@@ -92,6 +110,30 @@ export async function reviewSlides(deck: Deck, roots: MediaRoots, eligible: Reco
           slides.find(slide => slide.id === candidate.id)!.layout = candidate.layout;
           reports[candidate.id].issues = after;
         }
+      }
+    }
+    const segmenter = new Intl.Segmenter(deck.language, { granularity: 'sentence' });
+    const assessmentIds = new Set(deck.outline.filter(item => item.assessment).map(item => item.id));
+    const compacted = slides.flatMap(slide => {
+      if (eligible[slide.id] !== slide.version || assessmentIds.has(slide.id) || !needsReadableFit(reports[slide.id].issues)) return [];
+      const candidate = compactBody(slide, segmenter);
+      return candidate ? [candidate] : [];
+    });
+    if (compacted.length) {
+      const changed = await measure({ ...deck, slides: compacted }, roots, signal).catch(error => {
+        if (signal.aborted) throw error;
+        return undefined;
+      });
+      for (const candidate of compacted) {
+        const measured = changed?.[candidate.id];
+        if (!measured) continue;
+        const before = reports[candidate.id].issues;
+        const after = [...new Set([...semanticIssues(candidate), ...measured])];
+        if (needsReadableFit(after) || !after.every(issue => before.includes(issue))) continue;
+        const slide = slides.find(slide => slide.id === candidate.id)!;
+        slide.body = candidate.body;
+        slide.notes = candidate.notes;
+        reports[candidate.id].issues = after;
       }
     }
     for (const id of repeatedLayoutIds(slides)) reports[id].issues.push('repeated-layout');
