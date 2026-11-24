@@ -1,12 +1,13 @@
 import { copyFile, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { powerPointStyleInput } from '@sabaq/contracts/schema';
+import { powerPointStyleInput, slideChangeFields } from '@sabaq/contracts/schema';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
 import { z } from 'zod';
 import { documentRuns } from '@sabaq/lesson/rich-text';
-import type { RichRun, Slide } from '@sabaq/lesson/types';
+import { maxSlideObjects, type RichRun, type Slide } from '@sabaq/lesson/types';
 import type { JSONContent } from '@tiptap/core';
 import { ApiError } from '../errors';
 
@@ -21,10 +22,12 @@ const parsedSlides = z.array(z.discriminatedUnion('editable',[
     body:block,
     notes,
     table:z.object({headers:z.array(z.string()),rows:z.array(z.array(z.string()))}).optional(),
+    chart:slideChangeFields.shape.chart,
+    objects:z.array(z.record(z.string(),z.unknown())).max(maxSlideObjects).optional(),
     positioned:z.array(z.object({
-      id:z.enum(['title','body','image','table']),x:z.number().min(0).max(100),y:z.number().min(0).max(100),
+      id:z.enum(['title','body','image','table','chart']),x:z.number().min(0).max(100),y:z.number().min(0).max(100),
       w:z.number().positive().max(100.00001),h:z.number().positive().max(100.00001),rotation:z.literal(0),
-    })).min(1).max(4).optional(),
+    })).min(1).max(5).optional(),
     picture:z.object({alt:z.string().max(2000),side:z.enum(['left','right'])}).optional(),
   }),
 ])).min(1).max(40);
@@ -80,6 +83,11 @@ export async function extractEditablePptx(
     const title = documentRuns(titleDoc).map(run => run.text).join('');
     const bodyRuns = documentRuns(bodyDoc);
     const body = bodyRuns.map(run => run.text).join('');
+    const objects = slideChangeFields.shape.objects.safeParse(source.objects?.map(object => ({...object,id:randomUUID()})));
+    if (!objects.success) {
+      slides.push({editable:false,notes:source.notes});
+      continue;
+    }
     let picture: {path:string;alt:string} | undefined;
     if (source.picture) {
       const base = join(job,'editable-image-'+(index+1));
@@ -96,7 +104,9 @@ export async function extractEditablePptx(
       slide:{title,body,bodyRuns,notes:source.notes,
         richText:{...(title && {title:titleDoc}),...(body && {body:bodyDoc})},
         freeLayout:source.positioned ? {items:source.positioned} : undefined,
-        layout:source.table ? 'native-table' : source.picture ? `image-${source.picture.side}` : 'body',
+        layout:source.table ? 'native-table' : source.chart ? 'data-chart' : source.picture ? `image-${source.picture.side}` : 'body',
+        ...(source.chart && {chart:source.chart}),
+        ...(objects.data?.length && {objects:objects.data}),
         ...(source.table && {table:source.table})},
       picture,
     });

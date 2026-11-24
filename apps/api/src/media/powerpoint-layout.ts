@@ -1,6 +1,6 @@
-import { freeBounds, selectionBounds, type FreeId, type FreeItem, type FreeLayout } from '@sabaq/lesson/free-layout';
+import { freeBounds, freeImageIds, selectionBounds, type FreeId, type FreeItem, type FreeLayout } from '@sabaq/lesson/free-layout';
 
-const media = new Set<FreeId>(['image', 'table', 'chart', 'diagram']);
+const media = new Set<FreeId>([...freeImageIds, 'table', 'chart', 'diagram']);
 const titlePlaceholder = /<p:ph\b[^>]*\btype="title"/;
 const decorative = '<a:ext uri="{C183D7F6-B498-43B3-948B-1728B52AA6E4}">' +
   '<adec:decorative xmlns:adec="http://schemas.microsoft.com/office/drawing/2017/decorative" val="1"/></a:ext>';

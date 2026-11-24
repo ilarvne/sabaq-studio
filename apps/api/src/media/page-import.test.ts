@@ -49,14 +49,14 @@ test('editable PowerPoint import keeps native objects over masked artwork and pr
   tableSlide.addNotes('Выслушайте ответы перед обсуждением.');
   const fallbackSlide = pptx.addSlide();
   fallbackSlide.addText('Фигура', {x:1,y:0.2,w:11,h:1,bold:true});
-  fallbackSlide.addShape('rect',{x:1,y:2,w:3,h:2,fill:{color:'FF0000'}});
+  fallbackSlide.addShape('roundRect',{x:1,y:2,w:3,h:2,fill:{color:'FF0000'}});
   fallbackSlide.addText('Проверьте картинку.',{x:6,y:1.8,w:5,h:.7});
   fallbackSlide.addImage({data:'image/png;base64,'+png.toString('base64'),x:8,y:4.4,w:1,h:1,altText:'Образец'});
   fallbackSlide.addTable([[{text:'Код'}],[{text:'03'}]],{x:5,y:3.2,w:2,h:.9});
   fallbackSlide.addNotes('Заметки смешанного слайда.');
   const overlap=pptx.addSlide();
   overlap.addText('Скрытая часть заголовка',{x:1,y:.2,w:8,h:1});
-  overlap.addShape('rect',{x:2,y:.2,w:3,h:1,fill:{color:'FF3300'}});
+  overlap.addShape('roundRect',{x:2,y:.2,w:3,h:1,fill:{color:'FF3300'}});
   overlap.addNotes('Заметки сохраняются и для изображения.');
 
   const bytes = Buffer.from(await pptx.write({outputType:'nodebuffer'}) as Buffer);
@@ -115,6 +115,80 @@ test('editable PowerPoint import keeps native objects over masked artwork and pr
   }});
   assert.equal(edit.statusCode,200,edit.body);
   assert.equal(edit.json<Deck>().slides[0].body,'Жаңартылған мәтін');
+});
+
+test('a mixed wide PowerPoint slide keeps independently positioned native shapes, text, table and chart', async t => {
+  const { default: PptxGenJS } = await import('pptxgenjs');
+  const { default: JSZip } = await import('jszip');
+  const pptx = new PptxGenJS();
+  pptx.layout = 'LAYOUT_WIDE';
+  const original = pptx.addSlide();
+  original.addText('Суды өлшеу', { x: 0.8, y: 0.25, w: 10, h: 0.7 });
+  original.addText('Зерттеу нәтижесі', { x: 0.8, y: 1.1, w: 6, h: 0.7 });
+  original.addShape('rect', { x: 0.8, y: 2, w: 2, h: 1.2, fill: { color: 'EA3D32' } });
+  original.addShape('ellipse', { x: 3.2, y: 2, w: 2, h: 1.2, fill: { color: '237B54' }, line: { transparency: 100 } });
+  original.addShape('rightArrow', { x: 5.6, y: 2, w: 2, h: 1.2, fill: { color: '215AB0' }, line: { transparency: 100 } });
+  original.addText('Өлшемді салыстырыңыз', { x: 8.1, y: 2.2, w: 3.75, h: 0.65, align: 'center',
+    valign: 'top', color: '113355', fontSize: 23, bold: true, margin: 0,
+  });
+  original.addTable([[{ text: 'Өлшем' }], [{ text: '03' }]], { x: 0.8, y: 4, w: 3.7, h: 2 });
+  original.addChart(pptx.ChartType.bar, [{ name: 'Көлем', labels: ['Бірінші', 'Екінші'], values: [12.5, 27] }], {
+    x: 5.5, y: 4, w: 6, h: 2.5, barDir: 'col', barGrouping: 'clustered', showTitle: false,
+  });
+  original.addNotes('Дәлелді түсіндіріңіз.');
+
+  const mediaRoot = await mkdtemp(join(tmpdir(), 'sabaq-native-powerpoint-'));
+  const app = createStudioServer({ dbPath: ':memory:', mediaRoot });
+  t.after(async () => { await app.close(); await rm(mediaRoot, { recursive: true, force: true }); });
+  const importDeck = async (bytes: Buffer) => app.inject({ method: 'POST', payload: bytes,
+    url: '/api/import/slides?format=pptx&title=Import&language=kk&mode=editable',
+    headers: { 'content-type': 'application/octet-stream' },
+  });
+  const response = await importDeck(Buffer.from(await pptx.write({ outputType: 'nodebuffer' }) as Buffer));
+  assert.equal(response.statusCode, 201, response.body);
+  const deck = response.json<Deck>(), slide = deck.slides[0];
+  assert.equal(slide.importedPage, undefined);
+  assert.equal(slide.title, 'Суды өлшеу');
+  assert.equal(slide.body, 'Зерттеу нәтижесі');
+  assert.equal(slide.notes, 'Дәлелді түсіндіріңіз.');
+  assert.deepEqual(slide.freeLayout?.items.map(item => item.id), ['title', 'body', 'table', 'chart']);
+  assert.deepEqual(slide.table, { headers: ['Өлшем'], rows: [['03']] });
+  assert.deepEqual(slide.chart?.categories, ['Бірінші', 'Екінші']);
+  assert.deepEqual(slide.chart?.series, [{ name: 'Көлем', values: [12.5, 27] }]);
+  assert.deepEqual(slide.objects?.map(object => [object.kind, object.color]), [
+    ['rectangle', '#EA3D32'], ['ellipse', '#237B54'], ['arrow', '#215AB0'], ['text', '#113355'],
+  ]);
+  const label = slide.objects?.[3];
+  assert.ok(label?.kind === 'text');
+  assert.equal(label.text, 'Өлшемді салыстырыңыз');
+  assert.equal(label.align, 'center');
+  assert.equal(label.fontSize, 23);
+  assert.equal(label.bold, true);
+  assert.ok(Math.abs(label.x - 60.75) < 0.001);
+  assert.ok(Math.abs(label.y - 29.33333) < 0.001);
+  assert.ok(Math.abs(label.w - 28.125) < 0.001);
+  const backdrop = await app.inject({ url: slide.importedArtwork! });
+  const colors = await sharp(backdrop.rawPayload).extract({ left: 110, top: 280, width: 1000, height: 180 }).raw().toBuffer();
+  assert.ok(colors.every(channel => channel >= 250), 'Masked artwork retained native shapes or text.');
+
+  const edited = await app.inject({ method: 'PATCH', url: '/api/decks/' + deck.id, payload: {
+    op: { kind: 'slide', slideId: slide.id, baseVersion: slide.version,
+      changes: { objects: slide.objects?.map(object => object.id === label.id ? { ...object, text: 'Жаңа өлшем' } : object) },
+    },
+  } });
+  assert.equal(edited.statusCode, 200, edited.body);
+  const exported = await app.inject({ url: '/api/decks/' + deck.id + '/export/pptx' });
+  assert.equal(exported.statusCode, 200, exported.body);
+  const archive = await JSZip.loadAsync(exported.rawPayload);
+  const drawing = await archive.file('ppt/slides/slide1.xml')!.async('string');
+  assert.ok(drawing.includes('Жаңа өлшем') && !drawing.includes('Өлшемді салыстырыңыз'));
+  assert.ok(drawing.includes('<a:tbl>') && drawing.includes('<c:chart') && drawing.includes('prst="rightArrow"'));
+  const reimported = await importDeck(exported.rawPayload);
+  assert.equal(reimported.statusCode, 201, reimported.body);
+  const roundTrip = reimported.json<Deck>().slides[0];
+  assert.deepEqual(roundTrip.chart?.series, slide.chart?.series);
+  assert.deepEqual(roundTrip.table, slide.table);
+  assert.ok(roundTrip.objects?.some(object => object.kind === 'text' && object.text === 'Жаңа өлшем'));
 });
 
 
