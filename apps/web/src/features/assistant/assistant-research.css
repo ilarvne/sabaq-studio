@@ -1,0 +1,24 @@
+.as-research-trigger { flex: none; }
+.as-research-trigger > [data-icon="inline-end"] { width: 12px; height: 12px; }
+.as-research-menu[data-slot] {
+  width: min(18rem, calc(100vw - 24px));
+  gap: 10px;
+  padding: 12px;
+}
+.as-web-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 34px;
+  padding-block-end: 8px;
+  border-block-end: 1px solid var(--border);
+  font-weight: 550;
+}
+.as-research-disclosure, .as-depth-hint {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.as-research-disclosure { padding-block-start: 8px; border-block-start: 1px solid var(--border); }

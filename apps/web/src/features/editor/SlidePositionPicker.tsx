@@ -20,7 +20,7 @@ export function SlidePositionPicker({ slides, index, locale, onChange }: SlidePo
     <label className="slide-position-picker">
       <span className="sr-only">{labels[locale]}</span>
       <span aria-hidden="true" className="slide-position-readout">
-        {index + 1} / {slides.length}<CaretDownIcon />
+        <strong>{index + 1}</strong><span className="slide-position-total">/ {slides.length}</span><CaretDownIcon />
       </span>
       <select value={index} onChange={event => onChange(Number(event.target.value))} title={labels[locale]}>
         {slides.map((slide, position) => (

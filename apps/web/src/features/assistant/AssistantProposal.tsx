@@ -211,7 +211,7 @@ export function PendingProposalBar({proposals, selected, locale, revision, busy,
     </button>}
     {stale && <p role="status">{t.stale}</p>}
     <div className="as-pending-decisions">
-      <Button type="button" size="sm" disabled={busy || stale} onClick={() => decide(selected.id, 'apply')}>{t.apply}</Button>
+      <Button type="button" size="sm" className="as-pending-apply" disabled={busy || stale} onClick={() => decide(selected.id, 'apply')}>{t.apply}</Button>
       <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => decide(selected.id, 'dismiss')}>{t.dismiss}</Button>
     </div>
   </section>;

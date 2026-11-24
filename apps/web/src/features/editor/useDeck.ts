@@ -298,6 +298,8 @@ export function useDeck(initial: Deck) {
     const version = source.current.slides.find(slide => slide.id === id)?.version;
     if (!before || version === undefined) return;
     const previous = Object.fromEntries(Object.keys(changes).map(field => [field, before[field as keyof SlideChanges]])) as SlideChanges;
+    if (changes.objects && !previous.objects) previous.objects = [];
+    if (changes.coverArtwork && !previous.coverArtwork) previous.coverArtwork = null;
     if (deck.phase !== 'editing') remember(id, previous);
     submit({ kind: 'slide', slideId: id, baseVersion: version, changes });
   };

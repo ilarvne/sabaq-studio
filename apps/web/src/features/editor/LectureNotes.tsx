@@ -4,7 +4,7 @@ import { narrationSource, spokenNarration } from '@sabaq/lesson/narration';
 import { formatSpeechTime, speechSeconds } from '@sabaq/lesson/speech-time';
 import type { Locale, Slide } from '@sabaq/lesson/types';
 import { AssistantReadAloud } from '@/features/assistant/AssistantVoice';
-import { RewriteSpeechButton } from '@/features/assistant/Assistant';
+import { RewriteSpeechButton } from '@/features/assistant/AssistantCanvas';
 import { Button } from '@/components/coss/button';
 
 const labels={

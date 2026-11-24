@@ -1,3 +1,4 @@
+import type { Locale } from '@sabaq/lesson/types';
 import { slideCopy } from '@sabaq/slide-renderer/copy';
 
 export const editorCopy = {
@@ -221,3 +222,11 @@ export const editorCopy = {
     editContent: 'Мазмұнды өзгерту',
   },
 } as const;
+
+export type EditorCopy = (typeof editorCopy)[Locale];
+
+export const workspaceWords = {
+  en: { overview: 'Overview', grid: 'Grid', editSlide: 'Edit slide', mode: 'Editor view', actions: 'Actions', slideActions: 'Slide actions', titleTool: 'Title', textTool: 'Text', zoom: 'Canvas zoom', fit: 'Fit', rail: 'Resize slide list', inspector: 'Resize inspector' },
+  ru: { overview: 'Обзор', grid: 'Сетка', editSlide: 'Редактировать слайд', mode: 'Вид редактора', actions: 'Действия', slideActions: 'Действия со слайдом', titleTool: 'Заголовок', textTool: 'Текст', zoom: 'Масштаб слайда', fit: 'Вписать', rail: 'Изменить ширину списка слайдов', inspector: 'Изменить ширину панели свойств' },
+  kk: { overview: 'Шолу', grid: 'Тор', editSlide: 'Слайдты өңдеу', mode: 'Редактор көрінісі', actions: 'Әрекеттер', slideActions: 'Слайдқа арналған әрекеттер', titleTool: 'Тақырып', textTool: 'Мәтін', zoom: 'Слайд масштабы', fit: 'Сыйғызу', rail: 'Слайдтар тізімінің енін өзгерту', inspector: 'Қасиеттер панелінің енін өзгерту' },
+};

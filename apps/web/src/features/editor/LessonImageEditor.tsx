@@ -1,4 +1,5 @@
 import { useContext, useEffect, useId, useRef, useState } from 'react';
+import { freeLayoutAfterAddingImages, freeLayoutAfterRemovingImage } from '@sabaq/lesson/free-layout';
 import { cropRectangle, defaultImageCrop, type ImageCrop } from '@sabaq/lesson/image-crop';
 import { isSlideSymbol, slidePictograms, type Deck, type Locale, type Slide, type SlideChanges, type SlideImage, type SlidePictogram } from '@sabaq/lesson/types';
 import { ApiError, request } from '@/lib/api';
@@ -149,9 +150,11 @@ export function LessonImageEditor({deck,slide,locale,index=0,initialKind,save,cl
       if (index) {
         const additionalImages=[...(slide.additionalImages ?? [])];
         additionalImages[index-1]=next;
-        save({additionalImages,...(!initial && {layout:'image-grid'})});
+        const freeLayout=freeLayoutAfterAddingImages(slide,additionalImages);
+        save({additionalImages,...(freeLayout && {freeLayout}),
+          ...(!initial && !slide.freeLayout && !slide.chart && !slide.table && {layout:'image-grid'})});
       } else {
-        const layout=slide.image ? undefined : slide.chart || slide.table || (slide.design?.variant && !['opening','reflection'].includes(slide.design.variant)) ? 'split' : slide.layout==='cover' ? 'cover' : 'image-right';
+        const layout=slide.image || slide.freeLayout ? undefined : slide.chart || slide.table || (slide.design?.variant && !['opening','reflection'].includes(slide.design.variant)) ? 'split' : slide.layout==='cover' ? 'cover' : 'image-right';
         save({image:next,...(layout && {layout})});
       }
       close();
@@ -333,7 +336,11 @@ export function LessonImageEditor({deck,slide,locale,index=0,initialKind,save,cl
           <div className="im-buttons">
             {!!index && initial && <Button variant="destructive" disabled={busy} onClick={()=>{
               const additionalImages=(slide.additionalImages ?? []).filter((_,i)=>i!==index-1);
-              save({additionalImages,...(!additionalImages.length && slide.layout==='image-grid' && {layout:'image-right'})});close();
+              const freeLayout=freeLayoutAfterRemovingImage(slide,index===1?'image-2':'image-3');
+              save({additionalImages,...(freeLayout && {freeLayout}),
+                ...(!additionalImages.length && !slide.freeLayout && !slide.chart && !slide.table &&
+                  slide.layout==='image-grid' && {layout:'image-right'})});
+              close();
             }}>{imageGridWords[locale].remove+' '+(index+1)}</Button>}
             <Button variant="ghost" onClick={stop}>{t.cancel}</Button>
             {showSource && original && <Button variant="outline" disabled={busy} onClick={()=>{setChoosing(false);setError('');}}>{w.back}</Button>}

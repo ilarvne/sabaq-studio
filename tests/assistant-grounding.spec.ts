@@ -317,11 +317,16 @@ test('a document in the composer grounds the response without copying into the p
   await page.goto('/#/deck/schoolyard-kk');
   await page.getByRole('tab',{name:'Assistant',exact:true}).click();
   const panel = page.locator('.lesson-assistant');
-  const picking = page.waitForEvent('filechooser');
   await panel.getByRole('button',{name:'Attach source material',exact:true}).click();
+  const picker = page.getByRole('dialog',{name:'Add files',exact:true});
+  await picker.getByRole('tab',{name:'Upload',exact:true}).click();
+  const picking = page.waitForEvent('filechooser');
+  await picker.getByRole('button',{name:'Choose files',exact:true}).click();
   await (await picking).setFiles({name:fileName,mimeType:'text/plain',buffer:Buffer.from(text)});
+  await expect(picker.getByRole('checkbox',{name:fileName})).toBeChecked();
+  await picker.getByRole('button',{name:'Use selected files'}).click();
   await expect(panel.locator('.as-composer').getByText(fileName,{exact:true})).toBeVisible();
-  await expect(panel.locator('.as-file').filter({hasText:fileName})).toHaveAttribute('data-status','requires-action');
+  await expect(panel.locator('.as-file').filter({hasText:fileName})).toHaveAttribute('data-status','complete');
 
   const sent = page.waitForRequest(req=>req.method()==='POST' && new URL(req.url()).pathname===assistantUrl);
   const composer = panel.getByPlaceholder('Ask about this slide…');
@@ -394,8 +399,8 @@ test('a sensitive classroom topic can be confirmed in the creation form', async 
   await page.goto('/#/library');
   await page.getByRole('button',{name:'New lesson',exact:true}).click();
   await page.getByLabel('Lesson topic',{exact:true}).fill('History of the schoolyard');
-  for(let i=0;i<4;i++) await page.getByRole('button',{name:'Continue',exact:true}).click();
-  await page.getByRole('button',{name:'Lesson outline',exact:true}).click();
+  await page.getByRole('button',{name:'Continue',exact:true}).click();
+  await page.getByRole('button',{name:'Create outline',exact:true}).click();
   await expect(page.getByRole('alert').filter({hasText:'sensitive classroom topic'})).toBeVisible();
   await page.getByRole('button',{name:'Create anyway',exact:true}).click();
   await expect(page.getByRole('heading',{name:'Lesson outline'})).toBeVisible();
@@ -465,6 +470,40 @@ test('numeric slide tables can be converted to a real chart from the phone AI me
   await expect.poll(async () => ((await (await request.get(api)).json()) as Deck).slides[0].chart?.series[0].values).toEqual([6,12]);
 });
 
+test('overflow offers a scoped shortening proposal and preserves the original until approval', async ({page, request}) => {
+  test.setTimeout(60_000);
+  await page.setViewportSize({width: 1440, height: 900});
+  const created = await request.post('/api/decks', {data: {
+    topic: 'Garden field notes', template: 'blank', language: 'en', provider: 'fixture', review: false,
+  }});
+  expect(created.ok()).toBe(true);
+  const deck: Deck = await created.json();
+  const url = '/api/decks/' + deck.id;
+  const slide = deck.slides[0];
+  const sentence = 'The class recorded 17 observations in the garden.';
+  const body = Array.from({length: 90}, () => sentence).join(' ');
+  const patched = await request.patch(url, {data: {op: {kind: 'slide', slideId: slide.id, baseVersion: slide.version,
+    changes: {body, layout: 'body'}}}});
+  expect(patched.ok()).toBe(true);
+
+  await page.goto('/#/deck/' + deck.id);
+  const canvas = page.locator('.ed-stage');
+  await expect(canvas.locator('.ed-slide')).toBeVisible({timeout: 20_000});
+  const notice = page.locator('.ed-overflow-notice');
+  await expect(notice.getByRole('status')).toHaveText('Text does not fit on the slide.');
+  const posted = page.waitForRequest(req => req.method() === 'POST' && new URL(req.url()).pathname === url + '/assistant');
+  const shorten = notice.getByRole('button', {name: 'Shorten with AI'});
+  await expect(shorten).toHaveAttribute('aria-description', 'the body text');
+  await shorten.click();
+  expect((await posted).postDataJSON()).toMatchObject({slideId: slide.id, text: 'Shorten the text on this slide.'});
+  await expect(canvas).toHaveAttribute('data-preview', 'proposed');
+  await expect(canvas.locator('.ed-slide-body')).toHaveText(sentence);
+  expect(((await (await request.get(url)).json()) as Deck).slides[0].body).toBe(body);
+  await page.getByRole('region', {name: 'Pending changes'}).getByRole('button', {name: 'Apply changes'}).click();
+  await expect.poll(async () => ((await (await request.get(url)).json()) as Deck).slides[0].body).toBe(sentence);
+  await expect(notice).toHaveCount(0);
+});
+
 test('element translation and custom canvas requests target the selected field and slide', async ({page}) => {
   await page.route('**/api/capabilities', async route => {
     const response = await route.fetch();
@@ -472,12 +511,14 @@ test('element translation and custom canvas requests target the selected field a
   });
   await page.goto('/#/deck/schoolyard-en');
   const title = page.locator('.ed-stage [data-slot-entry="title"]');
-  await title.click({button:'right'});
+  await title.click();
+  await page.getByRole('button', {name:'Edit selected text with AI', exact:true}).click();
   const menu = page.getByRole('menu', {name: 'Edit with AI'});
   await menu.getByRole('menuitem', {name: 'Custom request'}).click();
   const composer = page.getByRole('textbox', {name: 'Ask about this slide…'});
   await expect(composer).toBeFocused();
   await expect(composer).toHaveValue(/the title/);
+  await expect(page.locator('.ed-stage [contenteditable]')).toHaveCount(0);
   await composer.fill('');
   await title.click({button:'right'});
   await expect(menu.getByRole('menuitem', {name: 'Add an example'})).toBeEnabled();
@@ -489,4 +530,83 @@ test('element translation and custom canvas requests target the selected field a
   const body = (await posted).postDataJSON();
   expect(body.slideId).toBe('s01');
   expect(body.text).toMatch(/Translate the title into Russian/);
+  expect(body.canvasScope).toEqual({field:'title'});
+});
+
+test('canvas context actions send the exact highlighted words', async ({page, request})=>{
+  await page.route('**/api/capabilities',async route=>{
+    const response=await route.fetch();
+    await route.fulfill({response,json:{...await response.json(),localAssistant:true}});
+  });
+  const deck:Deck=await (await request.post('/api/decks',{data:{topic:'Field observations',language:'en',provider:'fixture',template:'blank',review:false}})).json();
+  const slide=deck.slides[0], url='/api/decks/'+deck.id;
+  const selected='the measurements';
+  await expect(await request.patch(url,{data:{op:{kind:'slide',slideId:slide.id,baseVersion:slide.version,
+    changes:{body:'Record '+selected+' in your notebook.'}}}})).toBeOK();
+  await page.goto('/#/deck/'+deck.id);
+  const slot=page.locator('.ed-stage [data-slot-entry="body"]');
+  await expect(slot).toContainText(selected);
+  const point=await slot.evaluate((node,text)=>{
+    const walker=document.createTreeWalker(node,NodeFilter.SHOW_TEXT);
+    for(let item=walker.nextNode();item;item=walker.nextNode()) {
+      const from=item.textContent?.indexOf(text) ?? -1;
+      if(from<0) continue;
+      const range=document.createRange();
+      range.setStart(item,from);
+      range.setEnd(item,from+text.length);
+      const active=document.getSelection()!;
+      active.removeAllRanges();
+      active.addRange(range);
+      const rect=range.getBoundingClientRect();
+      return {x:rect.x+rect.width/2,y:rect.y+rect.height/2};
+    }
+    throw new Error('Slide text is missing.');
+  },selected);
+  await page.mouse.click(point.x,point.y,{button:'right'});
+  const menu=page.getByRole('menu',{name:'Edit selected text with AI'});
+  const posted=page.waitForRequest(req=>req.method()==='POST' && new URL(req.url()).pathname===url+'/assistant');
+  await menu.getByRole('menuitem',{name:'Simplify',exact:true}).click();
+  expect((await posted).postDataJSON()).toMatchObject({
+    slideId:slide.id,canvasScope:{field:'body',selection:{start:7,end:23,text:selected}},
+  });
+});
+
+test('object AI actions preview the selected object on its slide',async ({page,request})=>{
+  await page.setViewportSize({width:1440,height:900});
+  await page.emulateMedia({reducedMotion:'reduce'});
+  await page.route('**/api/capabilities',async route=>{
+    const response=await route.fetch();
+    await route.fulfill({response,json:{...await response.json(),localAssistant:true}});
+  });
+  const created=await (await request.post('/api/decks',{data:{topic:'Field observations',language:'en',provider:'fixture',template:'blank',review:false}})).json() as Deck;
+  const url='/api/decks/'+created.id;
+  const box={id:crypto.randomUUID(),kind:'text' as const,text:'Describe your observations.',color:'#123456',
+    x:12,y:70,w:45,h:15,rotation:0,fontSize:24,bold:false,align:'left' as const};
+  const patched=await request.patch(url,{data:{op:{kind:'slide',slideId:created.slides[0].id,baseVersion:created.slides[0].version,changes:{objects:[box]}}}});
+  await expect(patched).toBeOK();
+  const deck=await patched.json() as Deck;
+  const slide=deck.slides[0];
+  const task='Share what you saw.';
+  await page.route('**'+url+'/assistant',async route=>{
+    if(route.request().method()!=='POST') return route.continue();
+    const {clientId,text,canvasScope}=route.request().postDataJSON();
+    expect(canvasScope).toEqual({field:'object',objectId:box.id,version:slide.version,theme:deck.theme});
+    const snapshot:AssistantSnapshot={messages:[
+      {id:'user-'+clientId,role:'user',text,slideId:slide.id,canvasScope},
+      {id:'as-'+clientId,role:'assistant',text:'Review this edit.',status:'complete',proposal:{
+        id:clientId,status:'pending',baseRevision:deck.revision,actions:[{kind:'edit_object',label:'Edit selected object'}],
+        changes:[{slideId:slide.id,before:slide,after:{...slide,objects:[{...box,text:task}]}}],
+      }},
+    ]};
+    await route.fulfill({contentType:'application/x-ndjson',body:JSON.stringify(snapshot)+'\n'});
+  });
+  await page.goto('/#/deck/'+deck.id);
+  const canvas=page.locator('.ed-stage');
+  await canvas.getByRole('button',{name:/Text box · Describe your observations/}).press('Enter');
+  await page.getByRole('dialog').getByRole('button',{name:'Edit with AI',exact:true}).click();
+  await page.getByRole('menuitem',{name:'Simplify',exact:true}).click();
+  await expect(canvas.locator('.ed-object-text')).toHaveText(task);
+  await page.getByRole('button',{name:'Original',exact:true}).click();
+  await expect(canvas.locator('.ed-object-text')).toHaveText(box.text);
+  await expect(page.getByRole('region',{name:'Pending changes'}).getByRole('button',{name:'Apply changes'})).toBeEnabled();
 });

@@ -1,4 +1,5 @@
 import {test,expect} from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
 
 for (const appearance of ['dark','light']) {
   for (const [width,height] of [[1440,900],[1024,768],[820,1180],[375,812],[320,640]]) {
@@ -19,6 +20,11 @@ for (const appearance of ['dark','light']) {
         toolbar:Array.from(document.querySelectorAll<HTMLElement>('.ed-canvas-tools')).map(element=>element.scrollWidth-element.clientWidth)}));
       expect(overflow.page).toBeLessThanOrEqual(1);
       expect(overflow.toolbar.every(value=>value<=1)).toBe(true);
+      const audit=async()=>{
+        const result=await new AxeBuilder({page}).withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();
+        expect(result.violations.filter(item=>item.impact==='serious' || item.impact==='critical')).toEqual([]);
+      };
+      if(width===1440 || width===375)await audit();
       await page.getByRole('tab',{name:'Design',exact:true}).click();
       await expect(page.getByRole('button',{name:'Arrange elements',exact:true})).toBeVisible();
       await page.screenshot({path:testInfo.outputPath(`${appearance}-${width}-design.png`)});
@@ -27,6 +33,8 @@ for (const appearance of ['dark','light']) {
         await expect(page.getByRole('menuitem',{name,exact:true})).toBeVisible();
       }
       await page.keyboard.press('Escape');
+      await expect(page.locator('[data-base-ui-focus-guard]')).toHaveCount(0);
+      if(width===1440 || width===375)await audit();
     });
   }
 }

@@ -147,6 +147,33 @@
 .as-reply-text { min-width:0; white-space:normal; }
 .as-reply-text .as-markdown > :last-child { margin-block-end:0; }
 .as-reply-text + .as-change-card { margin-top:8px; }
+.as-tool-step {
+  display:flex;
+  align-items:center;
+  gap:6px;
+  min-width:0;
+  min-height:25px;
+  color:var(--muted-foreground);
+  font-size:12px;
+  line-height:1.4;
+}
+.as-tool-step > svg { width:14px; height:14px; flex:none; }
+.as-tool-step[data-state='error'] > svg, .as-tool-step .as-tool-outcome { color:var(--danger); }
+.as-tool-step[data-state='cancelled'] .as-tool-outcome { color:var(--muted-foreground); }
+.as-tool-provider, .as-tool-count, .as-tool-outcome { font-size:11px; }
+.as-tool-provider { margin-inline-start:auto; font-weight:600; }
+.as-tool-count { min-width:1.35rem; padding-inline:3px; border-radius:4px; background:var(--muted); text-align:center; }
+.as-tool-step + .as-reply-text, .as-tool-step + .as-change-card { margin-top:5px; }
+.as-sent-research {
+  display:flex;
+  align-items:center;
+  gap:4px;
+  margin-block-end:4px;
+  color:var(--muted-foreground);
+  font-size:11px;
+  font-weight:600;
+}
+.as-sent-research svg { width:12px; height:12px; flex:none; }
 .as-message-details {
   display: flex;
   align-items: baseline;
@@ -206,8 +233,6 @@
 .as-thinking > span:first-child { display:none; }
 .as-thinking .shimmer { --shimmer-color:var(--foreground); }
 .as-waiting { display:flex; align-items:center; min-height:21px; }
-.lesson-assistant .as-stream-text > span { animation-duration:150ms; }
-.lesson-assistant .as-stream-text > span > span { color:inherit; }
 .lesson-assistant .as-stream-text > [aria-hidden] { background:var(--muted-foreground); }
 .lesson-assistant .aui-thread-followup-suggestions { flex:none; margin-block:-3px 0; }
 .lesson-assistant .aui-thread-followup-suggestions > div { margin-inline:0; gap:6px; }
@@ -233,6 +258,44 @@
 .as-sources li + li { margin-top: .75rem; }
 .as-sources blockquote { margin: .25rem 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .as-sources small { color: var(--muted-foreground); }
+.lesson-assistant .as-web-sources-trigger {
+  gap:5px;
+  padding-inline:0 5px;
+  color:var(--muted-foreground);
+}
+.as-web-sources-trigger > svg { width:12px; height:12px; }
+.as-web-sources[data-open] .as-web-sources-trigger > svg { rotate:180deg; }
+.as-web-source-list {
+  display:grid;
+  gap:8px;
+  margin:0 0 4px;
+  padding:0 0 0 1.4rem;
+  list-style:decimal;
+  font-size:12px;
+}
+.as-web-source-list li::marker { color:var(--muted-foreground); font-variant-numeric:tabular-nums; }
+.as-web-source-list a {
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:1px 6px;
+  align-items:start;
+  padding:3px 4px;
+  margin-inline-start:-4px;
+  border-radius:4px;
+  color:var(--foreground);
+  font-weight:600;
+}
+.as-web-source-list a:hover { background:var(--muted); }
+.as-web-source-list a:focus-visible { outline:2px solid var(--ring); outline-offset:0; }
+.as-web-source-list a > svg { width:12px; height:12px; margin-block-start:2px; }
+.as-web-source-list a small { grid-column:1 / -1; color:var(--muted-foreground); font-weight:400; }
+.as-web-source-list blockquote {
+  display:-webkit-box;
+  margin:0;
+  overflow:hidden;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:3;
+}
 
 .as-status {
   display: flex;
@@ -428,6 +491,7 @@
 .as-pending-select { padding: 3px 4px; background: var(--card); }
 .as-pending-decisions { display: flex; flex-wrap: wrap; gap: 6px; }
 .as-pending-decisions button { min-height: 32px; }
+.ed-workspace .as-pending-apply { color: var(--primary-foreground); }
 .as-pending-bar > p { margin: 0; color: var(--muted-foreground); font-size: 12px; }
 @media (pointer: coarse) { .as-pending-decisions button { min-height: 44px; } }
 .as-canvas-actions { max-inline-size: min(19rem, var(--available-width)); max-block-size: var(--available-height); overflow: auto; }

@@ -1,6 +1,6 @@
 "use client";
 
-import { type ComponentProps, useMemo } from "react";
+import { type ComponentProps, Fragment, useMemo } from "react";
 import { cn } from "@/lib/utils";
 import { take } from "../utils/range";
 
@@ -44,30 +44,16 @@ export function StreamingText({
 
       {...props}
     >
-      {shown.map(({ word, mono: isMono }, i) => {
-        const fresh = streaming && shown.length - 1 - i < 2;
-        return (
-          <span
-            key={i}
-            className="fade-in animate-in fill-mode-both duration-500 motion-reduce:animate-none"
-          >
-            <span
-              className={cn(
-                "transition-colors duration-700 motion-reduce:transition-none",
-                fresh && "text-blue-500 dark:text-blue-400",
-                isMono &&
-                  "bg-foreground/[0.06] rounded-md px-1.5 py-0.5 font-mono text-[0.85em]",
-              )}
-            >
-              {word}
-            </span>{" "}
-          </span>
-        );
-      })}
+      {shown.map(({ word, mono: isMono }, index) => (
+        <Fragment key={index}>
+          {index > 0 && " "}
+          {isMono ? <code className="bg-foreground/[0.06] rounded-md px-1.5 py-0.5 font-mono text-[0.85em]">{word}</code> : word}
+        </Fragment>
+      ))}
       {streaming && shown.length > 0 && (
         <span
           aria-hidden
-          className="-mb-0.5 ml-0.5 inline-block h-4 w-0.5 animate-pulse rounded-full bg-blue-500 dark:bg-blue-400"
+          className="-mb-0.5 ml-0.5 inline-block h-3 w-0.5 rounded-full bg-primary"
         />
       )}
     </p>

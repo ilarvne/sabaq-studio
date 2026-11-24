@@ -1,0 +1,39 @@
+.ed-object-hit {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: transparent;
+  pointer-events: auto;
+  cursor: move;
+  touch-action: none;
+}
+.ed-object-hit:is(:hover, :focus, :active) { outline: 2px solid var(--primary); outline-offset: 1px; }
+.ed-artwork-object .ed-object-hit { min-width: 10px; min-height: 10px; }
+.ed-object-resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--primary);
+  border-radius: 3px;
+  background: var(--background);
+  opacity: 0;
+  cursor: nwse-resize;
+  pointer-events: auto;
+  touch-action: none;
+}
+.ed-slide-object:has(.ed-object-hit:hover, .ed-object-hit:focus, .ed-object-hit:active, .ed-object-resize:hover, .ed-object-resize:active) .ed-object-resize { opacity: 1; }
+.ed-object-dialog { max-width: 34rem; }
+.ed-object-form { display: grid; gap: 1rem; }
+.ed-object-form label { display: grid; gap: .375rem; min-width: 0; font-size: .8125rem; }
+.ed-object-form fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.ed-object-form legend { margin-bottom: .5rem; font-size: .875rem; font-weight: 600; }
+.ed-object-style, .ed-object-coordinates { display: grid; gap: .75rem; }
+.ed-object-style { grid-template-columns: repeat(auto-fit, minmax(5.75rem, 1fr)); align-items: end; }
+.ed-object-coordinates { grid-template-columns: repeat(auto-fit, minmax(4.5rem, 1fr)); }
+.ed-object-form .ed-object-bold { display: flex; align-items: center; min-height: 2.25rem; }
+.ed-object-style input[type='color'] { padding: .3125rem; }
+.ed-object-actions { display: flex; flex-wrap: wrap; gap: .5rem; }
