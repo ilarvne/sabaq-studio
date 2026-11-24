@@ -2,13 +2,14 @@ import { useEffect, useId, useRef, useState } from 'react';
 import {
   ArrowClockwiseIcon, CaretLeftIcon, CaretRightIcon, CheckCircleIcon, ClockIcon, ClosedCaptioningIcon,
   DeviceMobileIcon, DownloadSimpleIcon, FilmStripIcon, InfoIcon, MonitorIcon, NotePencilIcon, PlayIcon,
-  SquareIcon, VideoCameraIcon, WarningCircleIcon, XIcon,
+  SquareIcon, UserCircleIcon, VideoCameraIcon, WarningCircleIcon, XIcon,
 } from '@phosphor-icons/react';
-import { framePercent, videoFrame, videoSizes, type VideoAspect, type VideoJob, type VideoJobFailure, type VideoSettings, type VideoState } from '@sabaq/contracts/video';
+import { framePercent, videoFrame, videoSizes, type AvatarConsent, type AvatarPlacement, type VideoAspect, type VideoJob, type VideoJobFailure, type VideoSettings, type VideoState } from '@sabaq/contracts/video';
 import { formatSpeechTime, speechSeconds } from '@sabaq/lesson/speech-time';
 import { lessonPalette } from '@sabaq/lesson/themes';
 import type { Deck, Locale } from '@sabaq/lesson/types';
 import { VideoSlide } from '@sabaq/slide-renderer/video';
+import { OptionSelect } from '@/components/OptionSelect';
 import { Button } from '@/components/coss/button';
 import { Checkbox } from '@/components/coss/checkbox';
 import { DialogDescription, DialogTitle } from '@/components/coss/dialog';
@@ -16,10 +17,13 @@ import { Progress, ProgressIndicator, ProgressTrack } from '@/components/coss/pr
 import { Skeleton } from '@/components/coss/skeleton';
 import { ToggleGroup, ToggleGroupItem } from '@/components/shadcn/toggle-group';
 import { SlidePositionPicker } from '@/features/editor/SlidePositionPicker';
+import { AvatarConsentPanel } from './AvatarConsentPanel';
+import { avatarVideoCopy, LectureAvatarOptions, type AvatarSide } from './LectureAvatarOptions';
 import { reviewText } from './review-copy';
 import './lecture-export.css';
 
 const languageNames: Record<Locale, string> = { kk: 'Қазақша', ru: 'Русский', en: 'English' };
+const languageOptions = (Object.keys(languageNames) as Locale[]).map(value => ({ value, label: languageNames[value] }));
 const formats = [
   { value: '16:9', icon: MonitorIcon }, { value: '9:16', icon: DeviceMobileIcon }, { value: '1:1', icon: SquareIcon },
 ] as const;
@@ -111,6 +115,11 @@ export function LectureExport({ deck, locale, slideId, onClose }: {
   const [aspect, setAspect] = useState<VideoAspect>('16:9');
   const [captions, setCaptions] = useState(true);
   const [reveals, setReveals] = useState(false);
+  const [language, setLanguage] = useState(deck.language);
+  const [withAvatar, setWithAvatar] = useState(false);
+  const [avatarSide, setAvatarSide] = useState<AvatarSide>('right');
+  const [avatarPlacement, setAvatarPlacement] = useState<AvatarPlacement>('corner');
+  const [avatarAccessLost, setAvatarAccessLost] = useState(false);
   const [worker, setWorker] = useState<VideoState>();
   const [connectionError, setConnectionError] = useState(false);
   const [requestError, setRequestError] = useState(false);
@@ -124,19 +133,28 @@ export function LectureExport({ deck, locale, slideId, onClose }: {
   const slide = slides[index];
   const url = `/api/decks/${encodeURIComponent(deck.id)}/video`;
   const blockedReveal = slides.some(item => item.importedPage && item.notes.trim().split(/\n+/u).filter(line => line.trim()).length > 1);
-  const settings: VideoSettings = { position: 'none', language: deck.language, aspect, captions, revealParagraphs: reveals && !blockedReveal };
+  const external = worker?.enabled && !worker.narrationOnly;
+  const avatarAvailable = !!(external && worker.avatar && !avatarAccessLost && !connectionError);
+  const showAvatar = withAvatar || (external && (worker.avatar || worker.biometrics?.configured));
+  const settings: VideoSettings = {
+    position: withAvatar ? avatarSide : 'none',
+    ...(withAvatar && { avatarPlacement }),
+    language: external ? language : deck.language,
+    aspect, captions, revealParagraphs: reveals && !blockedReveal,
+  };
   const job = worker?.job;
   const busy = isActive(job);
-  const matches = job?.revision === deck.revision && job.settings.position === 'none' && job.settings.language === settings.language &&
+  const matches = job?.revision === deck.revision && job.settings.position === settings.position && job.settings.language === settings.language &&
+    (!withAvatar || (job.settings.avatarPlacement ?? 'corner') === avatarPlacement) &&
     (job.settings.aspect ?? '16:9') === aspect && job.settings.captions === captions && !!job.settings.revealParagraphs === settings.revealParagraphs;
-  const ready = worker?.enabled && matches && job.status === 'ready' ? job : undefined;
+  const ready = worker?.enabled && !connectionError && (!withAvatar || avatarAvailable) && matches && job.status === 'ready' ? job : undefined;
   const playback = !!ready && playing === ready.key;
   const file = ready ? `${url}/${encodeURIComponent(ready.key)}/file` : undefined;
-  const shownStatus = busy || (worker?.enabled && matches) ? job?.status : undefined;
+  const shownStatus = busy || (worker?.enabled && (!withAvatar || avatarAvailable) && matches) ? job?.status : undefined;
   const hasNotes = slides.some(item => item.notes.trim());
   const complete = !!slide && slides.length === deck.slides.length;
   const estimate = hasNotes ? slides.reduce((sum, item) => sum + (item.notes.trim()
-    ? speechSeconds(item.notes, deck.speechProfile?.wordsPerMinute) : 3), 0) : 0;
+    ? speechSeconds(item.notes, settings.language === deck.language ? deck.speechProfile?.wordsPerMinute : undefined) : 3), 0) : 0;
   const frame = videoFrame(settings);
 
   useEffect(() => {
@@ -152,10 +170,17 @@ export function LectureExport({ deck, locale, slideId, onClose }: {
         if (controller.signal.aborted) return;
         if (!restored.current) {
           restored.current = true;
-          if (current.job?.revision === deck.revision && current.job.settings.position === 'none') {
-            setAspect(current.job.settings.aspect ?? '16:9');
-            setCaptions(current.job.settings.captions);
-            setReveals(!!current.job.settings.revealParagraphs);
+          const saved = current.job?.revision === deck.revision ? current.job.settings : undefined;
+          if (saved && (saved.position === 'none' || (current.enabled && !current.narrationOnly && current.avatar))) {
+            setAspect(saved.aspect ?? '16:9');
+            setCaptions(saved.captions);
+            setReveals(!!saved.revealParagraphs);
+            setLanguage(saved.language);
+            if (saved.position !== 'none') {
+              setWithAvatar(true);
+              setAvatarSide(saved.position);
+              setAvatarPlacement(saved.avatarPlacement ?? 'corner');
+            }
           }
         }
         wasActive = isActive(current.job);
@@ -170,8 +195,22 @@ export function LectureExport({ deck, locale, slideId, onClose }: {
     return () => { controller.abort(); window.clearTimeout(timer); };
   }, [url, deck.revision, request, refresh]);
 
+  function suspendAvatar() {
+    setAvatarAccessLost(true);
+    setPlaying(undefined);
+  }
+
+  function updateConsent(biometrics: AvatarConsent) {
+    if (biometrics.state === 'active') {
+      setAvatarAccessLost(false);
+      setRequestError(false);
+    } else suspendAvatar();
+    setWorker(current => current && { ...current, biometrics });
+    refreshStatus(value => value + 1);
+  }
+
   async function changeExport(action: 'start'|'cancel') {
-    if (request) return;
+    if (request || (action === 'start' && withAvatar && !avatarAvailable)) return;
     setRequest(action);
     setRequestError(false);
     try {
@@ -179,7 +218,10 @@ export function LectureExport({ deck, locale, slideId, onClose }: {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(action === 'cancel' ? {} : { revision: deck.revision, settings }),
       });
-      if (!response.ok) throw new Error();
+      if (!response.ok) {
+        if (action === 'start' && response.status === 403 && withAvatar && worker?.biometrics) suspendAvatar();
+        throw new Error();
+      }
       setWorker(await response.json());
       setConnectionError(false);
     } catch { setRequestError(true); }
@@ -228,6 +270,10 @@ export function LectureExport({ deck, locale, slideId, onClose }: {
               <div className="lecture-mark-band" style={{ height: framePercent(frame.labelBox, frame).height }} aria-hidden="true"/>
               <div className="lecture-ai" style={framePercent(frame.labelBox, frame)} aria-hidden="true">ИИ</div>
               {frame.captionBox && <div className="lecture-caption-band" style={framePercent(frame.captionBox, frame)} aria-hidden="true"/>}
+              {frame.avatarBox && avatarAvailable && <div className="lecture-avatar-area" data-background={frame.avatarBackground}
+                style={framePercent(frame.avatarBox, frame)} role="img" aria-label={avatarVideoCopy[locale].area}>
+                <UserCircleIcon aria-hidden="true"/><span>{avatarVideoCopy[locale].area}</span>
+              </div>}
               </>}
           </div> : <div className="lecture-empty"><FilmStripIcon size={28}/>{reviewText(locale, 'none')}</div>}
         </div>
@@ -249,7 +295,10 @@ export function LectureExport({ deck, locale, slideId, onClose }: {
               </ToggleGroupItem>)}
             </ToggleGroup>
           </div>
-          <div className="lecture-language"><span>{copy.language}</span><strong lang={deck.language}>{languageNames[deck.language]}</strong></div>
+          <div className="lecture-language"><span>{copy.language}</span>{external
+            ? <OptionSelect label={copy.language} value={language} options={languageOptions} onChange={setLanguage} size="sm"/>
+            : <strong lang={deck.language}>{languageNames[deck.language]}</strong>}
+          </div>
           <label className="lecture-option">
             <ClosedCaptioningIcon size={19}/><span><strong>{copy.subtitles}</strong><small>{copy.subtitleHint}</small></span>
             <Checkbox aria-label={copy.subtitles} checked={captions} onCheckedChange={setCaptions}/>
@@ -258,7 +307,10 @@ export function LectureExport({ deck, locale, slideId, onClose }: {
             <FilmStripIcon size={19}/><span><strong>{copy.reveal}</strong><small id={revealHelp}>{blockedReveal ? copy.imported : copy.revealHint}</small></span>
             <Checkbox aria-label={copy.reveal} aria-describedby={revealHelp} checked={settings.revealParagraphs} disabled={blockedReveal} onCheckedChange={setReveals}/>
           </label>
+          {showAvatar && <LectureAvatarOptions locale={locale} available={avatarAvailable} selected={withAvatar} side={avatarSide}
+            placement={avatarPlacement} onSelected={setWithAvatar} onSide={setAvatarSide} onPlacement={setAvatarPlacement}/>}
         </fieldset>
+        {worker?.biometrics && <AvatarConsentPanel initial={worker.biometrics} locale={locale} changed={updateConsent} onAccessLost={suspendAvatar}/>}
       </section>
     </div>
 
@@ -284,7 +336,7 @@ export function LectureExport({ deck, locale, slideId, onClose }: {
           {busy ? <Button variant="outline" size="lg" disabled={!!request} onClick={() => void changeExport('cancel')}>{copy.cancel}</Button>
             : ready && file ? <Button size="lg" render={<a href={file} download/>}><DownloadSimpleIcon/>{copy.download}</Button>
             : <Button size="lg" onClick={() => void changeExport('start')} loading={request === 'start'}
-                disabled={checking || unavailable || !worker?.enabled || !complete || !hasNotes}><VideoCameraIcon/>{copy.generate}</Button>}
+                disabled={checking || unavailable || !worker?.enabled || !complete || !hasNotes || (withAvatar && !avatarAvailable)}><VideoCameraIcon/>{copy.generate}</Button>}
         </div>
       </div>
     </footer>

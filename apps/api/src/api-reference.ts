@@ -14,7 +14,7 @@ const binaries = ['application/vnd.openxmlformats-officedocument.presentationml.
 type Parameter = { name: string; in: 'path' | 'query' | 'header'; required?: boolean; schema: object };
 type Description = {
   summary: string; body?: ZodType | 'binary'; status?: number; parameters?: Parameter[];
-  responseTypes?: string[]; errors?: Record<number, string>;
+  responseTypes?: string[]; successes?: Record<number, string>; errors?: Record<number, string>;
 };
 
 const core: Record<string, Description> = {
@@ -76,7 +76,12 @@ const core: Record<string, Description> = {
     status: 201, errors: { 409: 'The lesson or request ID changed.', 503: 'The translator is unavailable.' } },
   'POST /api/decks/:id/language-versions/align': { summary: 'Align structure while retaining existing translated edits',
     body: languageAlignInput, errors: { 409: 'A participating revision changed.' } },
-  'GET /api/biometrics/self': { summary: 'Read your current avatar enrollment status' },
+  'GET /api/biometrics/self': { summary: 'Read your avatar status and refresh consent with the operator when enrolled',
+    errors: { 401: 'Sign in to manage avatar consent.', 403: 'Current avatar consent could not be verified.',
+      503: 'The regional biometric operator is unavailable.' } },
+  'DELETE /api/biometrics/self': { summary: 'Revoke avatar consent and request deletion of your biometric data and recordings',
+    successes: { 200: 'Deletion is complete or no enrollment exists.', 202: 'Access is revoked and deletion is pending.' },
+    errors: { 401: 'Sign in to manage avatar consent.' } },
   'POST /api/biometrics/self/enrollment': { summary: 'Confirm the policy and request an operator enrollment link',
     body: biometricEnrollmentInput },
   'GET /api/decks/:id/video': { summary: 'Read current lecture render and avatar availability' },
@@ -143,7 +148,7 @@ export function registerApiReference(app: FastifyInstance, gateway: boolean) {
         ...(spec?.body && { requestBody: bodySchema(spec.body) }),
         responses: {
           [spec?.status ?? 200]: { description: 'Successful response.', ...(content && { content }) },
-          ...Object.fromEntries(Object.entries(errors).map(([status, description]) => [status, { description }])),
+          ...Object.fromEntries(Object.entries({ ...spec?.successes, ...errors }).map(([status, description]) => [status, { description }])),
           default: { description: 'Request failed.' },
         },
       };

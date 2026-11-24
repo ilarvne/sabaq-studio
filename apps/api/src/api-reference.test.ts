@@ -17,5 +17,10 @@ test('OpenAPI describes the registered API, including the export job, stream rep
   assert.ok(events.parameters.some((parameter: { name: string }) => parameter.name === 'Last-Event-ID'));
   assert.ok(events.responses['200'].content['text/event-stream']);
   assert.equal(reference.paths['/api/classroom-polls/{code}'].post['x-studio-access'], 'Public classroom code');
+  const biometrics = reference.paths['/api/biometrics/self'];
+  assert.equal(biometrics.get['x-studio-access'], 'Signed-in biometric subject');
+  assert.equal(biometrics.delete['x-studio-access'], 'Signed-in biometric subject');
+  assert.match(biometrics.delete.responses['200'].description, /complete/i);
+  assert.match(biometrics.delete.responses['202'].description, /pending/i);
   assert.ok(!JSON.stringify(reference).includes('x-studio-gateway'));
 });
