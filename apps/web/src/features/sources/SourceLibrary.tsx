@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { CheckCircleIcon, DownloadSimpleIcon, FileDocIcon, FilePdfIcon, FileTextIcon, FolderOpenIcon, ImageIcon, MagnifyingGlassIcon, TrashIcon, UploadSimpleIcon, WarningCircleIcon } from '@phosphor-icons/react';
+import { CheckCircleIcon, DownloadSimpleIcon, FileTextIcon, FolderOpenIcon, MagnifyingGlassIcon, TrashIcon, UploadSimpleIcon, WarningCircleIcon } from '@phosphor-icons/react';
 import type { SourceFile } from '@sabaq/contracts/source-files';
 import type { Locale } from '@sabaq/lesson/types';
 import { Button } from '@/components/coss/button';
@@ -15,10 +15,9 @@ import { ApiError, request } from '@/lib/api';
 import { formatStudioDate } from '@/lib/date';
 import { useMediaCapabilities } from '@/lib/media';
 import { sourceCopy } from './source-copy';
-import { sourceFileAccept, sourceFilePath, uploadSourceFile, useSourceFiles } from './source-api';
+import { notifySourceFilesChanged, sourceFileAccept, sourceFilePath, uploadSourceFile, useSourceFiles } from './source-api';
+import { SourceFileIcon } from './SourceFileIcon';
 import './source-library.css';
-
-const formatIcons = {pdf:FilePdfIcon, docx:FileDocIcon, txt:FileTextIcon, md:FileTextIcon, png:ImageIcon, jpg:ImageIcon, jpeg:ImageIcon};
 
 function formatKey(file: SourceFile) {
   return file.format === 'jpeg' ? 'jpg' : file.format;
@@ -88,7 +87,6 @@ export default function SourceLibrary({locale}: {locale: Locale}) {
       if (!controller.signal.aborted) {
         setProgress(undefined);
         setUploadResults({saved,errors});
-        refresh();
       }
     }
   }
@@ -101,7 +99,7 @@ export default function SourceLibrary({locale}: {locale: Locale}) {
       await request(sourceFilePath(deleting.id), {method:'DELETE'});
       focusAfterDelete.current = files.length === 1 ? 'upload' : 'search';
       setDeleting(undefined);
-      refresh();
+      notifySourceFilesChanged();
     } catch {
       setDeleteFailed(true);
     } finally {
@@ -196,11 +194,10 @@ export default function SourceLibrary({locale}: {locale: Locale}) {
         <TableHeader><TableRow><TableHead scope="col">{t.file}</TableHead><TableHead scope="col" className="source-file-size">{t.size}</TableHead>
           <TableHead scope="col" className="source-file-date">{t.added}</TableHead><TableHead scope="col" className="text-end">{t.actions}</TableHead></TableRow></TableHeader>
         <TableBody>{matches.map(file=>{
-          const Icon = formatIcons[file.format];
           const size = fileSize(file.size, locale);
           return <TableRow key={file.id}>
             <TableCell className="source-file-cell"><div className="source-file-identity">
-              <span className="source-file-icon"><Icon aria-hidden/></span>
+              <span className="source-file-icon" data-format={formatKey(file)}><SourceFileIcon format={file.format}/></span>
               <div className="source-file-text"><span className="source-file-name" title={file.name}>{file.name}</span>
                 <span className="source-file-format">{formatKey(file).toUpperCase()}<span className="source-file-size-small"> · {size}</span></span>
               </div>

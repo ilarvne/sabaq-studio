@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { SourceFile } from '@sabaq/contracts/source-files';
 import type { Locale } from '@sabaq/lesson/types';
 import { ApiError, request } from '@/lib/api';
@@ -13,6 +13,12 @@ const ocrConsent = {
 
 export function sourceFilePath(id: string) {
   return '/source-files/' + encodeURIComponent(id);
+}
+
+const sourceFilesEvents = new EventTarget();
+
+export function notifySourceFilesChanged() {
+  sourceFilesEvents.dispatchEvent(new Event('change'));
 }
 
 export async function uploadSourceFile(file: File, locale: Locale, ocr: boolean, signal: AbortSignal): Promise<SourceFile> {
@@ -43,6 +49,7 @@ export async function uploadSourceFile(file: File, locale: Locale, ocr: boolean,
     body = await response.json();
   }
   if (!response.ok) throw new ApiError(response.status, body);
+  notifySourceFilesChanged();
   return body as SourceFile;
 }
 
@@ -51,15 +58,23 @@ export function useSourceFiles(enabled = true) {
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [revision, setRevision] = useState(0);
+  const refresh = useCallback(() => setRevision(current => current + 1), []);
+  useEffect(() => {
+    if (!enabled) return;
+    sourceFilesEvents.addEventListener('change', refresh);
+    return () => sourceFilesEvents.removeEventListener('change', refresh);
+  }, [enabled, refresh]);
   useEffect(() => {
     if (!enabled) return;
     const controller = new AbortController();
     setLoading(true);
     setFailed(false);
-    void request<SourceFile[]>('/source-files', {signal:controller.signal}).then(setFiles)
+    void request<SourceFile[]>('/source-files', {signal:controller.signal}).then(result => {
+      if (!controller.signal.aborted) setFiles(result);
+    })
       .catch(() => { if (!controller.signal.aborted) setFailed(true); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [enabled, revision]);
-  return {files, loading, failed, refresh: () => setRevision(current => current + 1)};
+  return {files, loading, failed, refresh};
 }
