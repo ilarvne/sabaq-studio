@@ -40,9 +40,16 @@ export function videoFrame(settings: VideoLayoutSettings) {
 export function framePercent(box:FrameBox, frame:{width:number;height:number}) {
   return {left:box.x/frame.width*100+'%',top:box.y/frame.height*100+'%',width:box.width/frame.width*100+'%',height:box.height/frame.height*100+'%'};
 }
+export type VideoJobFailure = {
+  stage: 'prepare' | 'render' | 'scene' | 'assemble' | 'verify' | 'publish';
+  /** One-based position in the exported revision. */
+  slide?: number;
+};
+
 export type VideoJob = {
   key: string; revision: number; settings: VideoSettings;
   status: 'queued' | 'running' | 'verifying' | 'failed' | 'cancelled' | 'ready'; completed: number; total: number;
+  failure?: VideoJobFailure;
 };
 export type AvatarConsent = {configured:boolean;policy?:string;state:'none'|'enrolling'|'active'|'deleting'|'deleted'};
 export type VideoState = { biometrics?:AvatarConsent; enabled: boolean; avatar: boolean; narrationOnly?: true; job?: VideoJob };

@@ -43,6 +43,7 @@ test('new video revisions reuse unchanged scenes, recover after failed verificat
     c2pa: 'test', avatar: undefined, token: undefined };
   await writeFile(config.detector, 'independent'); await writeFile(config.anchors, 'local roots');
   let scenes = 0, assemblies = 0, verified = false;
+  const diagnostics = t.mock.method(console, 'error', () => {});
   const exportIds: string[] = [];
   t.mock.method(globalThis, 'fetch', async (url: string, req: RequestInit) => {
     assert.ok(new Headers(req.headers).get('Idempotency-Key'));
@@ -66,6 +67,8 @@ test('new video revisions reuse unchanged scenes, recover after failed verificat
   }
   await videos.start(d.id, 1, options);
   const failed = await waitFor('failed');
+  assert.deepEqual(failed.failure, { stage: 'verify' });
+  assert.deepEqual(diagnostics.mock.calls[0].arguments, ['Video export failed', { key: failed.key, revision: 1, stage: 'verify' }]);
   await assert.rejects(videos.file(d.id, failed.key));
   assert.equal(scenes, 2);
   await videos.close();
@@ -73,6 +76,7 @@ test('new video revisions reuse unchanged scenes, recover after failed verificat
   verified = true;
   await videos.start(d.id, 1, options);
   const ready = await waitFor('ready');
+  assert.equal(ready.failure, undefined);
   assert.equal(scenes, 2);
   assert.equal(await readFile(await videos.file(d.id, ready.key), 'utf8'), 'fake-mp4-2');
   deck.revision++; deck.slides[1].notes = 'Only this scene changes.';

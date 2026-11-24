@@ -28,7 +28,7 @@ export function VideoSlide({settings,...props}:SlideCanvasProps & {settings:Vide
   const frame=videoFrame(settings),{slide,deck}=props;
   const ratio=frame.contentBox.width/frame.contentBox.height;
   // Keep flattened art and geometry-dependent groups registered to their original slide.
-  const fixed=!!(slide.importedPage || slide.importedArtwork || slide.freeLayout?.items.some(item=>item.group || item.rotation));
+  const fixed=!!(slide.importedPage || slide.importedArtwork || slide.objects?.length || slide.freeLayout?.items.some(item=>item.group || item.rotation));
   const portrait=(settings.aspect ?? '16:9')!=='16:9' || ratio<1.4;
   const adapted=!portrait || fixed || slide.diagram && !slide.freeLayout ? slide :
     slide.freeLayout ? reflowFree(slide,ratio) : {...slide,layout:'stacked' as const};

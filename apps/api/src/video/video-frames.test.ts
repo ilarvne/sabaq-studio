@@ -28,3 +28,15 @@ test('native square and portrait PNGs reflow the text and reveal the second para
     const meta=await sharp(frames[0]).metadata();assert.equal(meta.width,1080);assert.equal(meta.height,aspect==='1:1'?1080:1920);
   }
 });
+
+test('a slide with extra narration paragraphs holds its last reveal while narration continues',async()=>{
+  const source=makeFixtureDeck('ru');
+  const lines=Array.from({length:8},(_,index)=>`Абзац ${index+1}.`);
+  const deck={...source,slides:[{id:'long-narration',lessonPart:'lesson',status:'ready' as const,version:0,
+    layout:'body' as const,title:'Солнечная система',body:'Планеты движутся вокруг Солнца.',notes:lines.join('\n')}]};
+  const settings={aspect:'16:9',language:'ru',position:'none',captions:true,revealParagraphs:true} as const;
+  const frames=await renderVideoSteps(deck,{catalog:catalogRoot,generated:defaultMediaRoot},settings,lines.length,AbortSignal.timeout(45000));
+  assert.equal(frames.length,lines.length);
+  assert.ok(!frames[0].equals(frames[1]));
+  assert.ok(frames.slice(2).every(frame=>frame===frames[1]));
+});

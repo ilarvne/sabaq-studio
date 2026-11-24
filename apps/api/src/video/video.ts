@@ -6,7 +6,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import type { FastifyInstance,FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { Deck, Slide } from '@sabaq/lesson/types';
-import { videoSizes,type VideoJob, type VideoSettings, type VideoState } from '@sabaq/contracts/video';
+import { videoSizes, type VideoJob, type VideoJobFailure, type VideoSettings, type VideoState } from '@sabaq/contracts/video';
 import type { MediaRoots } from '../media/powerpoint';
 import { imagePath } from '../media/powerpoint';
 import { renderSlideFile, renderVideoSteps } from '../media/render-export';
@@ -62,7 +62,7 @@ async function callWorker(config: Config, path: string, payload: unknown, key: s
     });
     if (response.ok) return response;
     await response.body?.cancel();
-    if (attempt >= 2 || !retryable.has(response.status)) throw new Error('Video worker request failed.');
+    if (attempt >= 2 || !retryable.has(response.status)) throw new ApiError(response.status, 'Video worker request failed.');
     await delay(300 * (2 ** attempt), undefined, { signal });
   }
 }
@@ -119,7 +119,8 @@ export class VideoService {
     return { enabled: !!this.config, avatar: !this.config?.narrationOnly && (this.shared ? !!(person && this.vault.identify(person)) : !!this.config?.avatar),
       ...(this.config?.narrationOnly && { narrationOnly: true }),
       ...(!this.config?.narrationOnly && this.shared && person && {biometrics:this.vault.summary(person)}),
-      ...(job && { job: { key: job.key, revision: job.revision, status: job.status, settings: job.settings, completed: job.completed, total: job.total } }) };
+      ...(job && { job: { key: job.key, revision: job.revision, status: job.status, settings: job.settings, completed: job.completed, total: job.total,
+        ...(job.status === 'failed' && job.failure && { failure: job.failure }) } }) };
   }
   async start(id: string, revision: number, options: VideoSettings,person?:Principal) {
     if (!this.config) throw new ApiError(503, 'Video worker and independent verification must be configured.');
@@ -184,12 +185,21 @@ export class VideoService {
     job.status = 'running';
     this.save(job);
     const controller = new AbortController();
-    const task = this.run(job, controller.signal).catch(() => {
-      if (!controller.signal.aborted) this.save({ ...job, status: 'failed' });
+    let failure: VideoJobFailure = { stage: 'prepare' };
+    const task = this.run(job, controller.signal, stage => { failure = stage; }).catch((error: unknown) => {
+      if (!controller.signal.aborted) this.fail(job, failure, error);
     }).finally(() => { this.active.delete(job.deckId); this.next(); });
     this.active.set(job.deckId, { task, controller });
   }
-  private async scene(deck: Deck, slide: Slide, job: StoredJob, signal: AbortSignal) {
+  private fail(job: StoredJob, failure: VideoJobFailure, error?: unknown) {
+    // Provider and renderer errors may contain untrusted text or local paths.
+    console.error('Video export failed', {
+      key: job.key, revision: job.revision, ...failure,
+      ...(error instanceof ApiError && { statusCode: error.status }),
+    });
+    this.save({ ...job, status: 'failed', failure });
+  }
+  private async scene(deck: Deck, slide: Slide, job: StoredJob, signal: AbortSignal, renderingComplete: () => void) {
     const config = this.config!;
     const avatar=await this.authorizeJob(job,'scene',signal);
     const path = slide.image && imagePath(slide.image.src, this.roots);
@@ -214,6 +224,7 @@ export class VideoService {
     const frames=native ? await this.renderSteps(single,this.roots,job.settings,plan.paragraphs.length,signal)
       : [await this.render(single,'png',this.roots)];
     if(frames.length!==keys.length) throw new Error('Incomplete video frames.');
+    renderingComplete();
     const selected:string[]=[];
     for(const [index,segment] of keys.entries()){
       signal.throwIfAborted();
@@ -247,7 +258,7 @@ export class VideoService {
     const { sceneId } = z.object({ sceneId: z.string().regex(/^[A-Za-z0-9._:-]{1,160}$/) }).parse(JSON.parse(Buffer.concat(chunks).toString()));
     return sceneId;
   }
-  private async run(job: StoredJob, signal: AbortSignal) {
+  private async run(job: StoredJob, signal: AbortSignal, setStage: (failure: VideoJobFailure) => void) {
     if (job.policy !== await policyDigest(this.config!)) throw new Error('Video verification policy changed.');
     const watermarkId = videoWatermarkId.parse(job.watermarkId);
     const row = this.studio.store.db.prepare('SELECT data FROM revisions WHERE deck_id=? AND revision=?').get(job.deckId, job.revision);
@@ -256,11 +267,13 @@ export class VideoService {
     const sceneIds: string[] = [];
     for (const [index,slide] of deck.slides.entries()) {
       signal.throwIfAborted();
-      sceneIds.push(...await this.scene(deck, slide, job, signal));
+      setStage({ stage: 'render', slide: index + 1 });
+      sceneIds.push(...await this.scene(deck, slide, job, signal, () => setStage({ stage: 'scene', slide: index + 1 })));
       signal.throwIfAborted();
       job.completed = index+1; job.status = 'running'; this.save(job);
     }
     const config = this.config!;
+    setStage({ stage: 'assemble' });
     await this.authorizeJob(job,'assemble',signal);
     const response = await callWorker(config, '/assemble', { sceneIds, watermarkId, ...(job.settings.aspect && {frame:videoSizes[job.settings.aspect]}), ...(job.biometricRef && {subjectRef:job.biometricRef}), label: 'ИИ', pipelineVersion: config.version }, job.key, signal);
     await mkdir(this.directory, { recursive: true, mode: 0o700 });
@@ -269,9 +282,11 @@ export class VideoService {
     try {
       await fetchVideo(response, temp, signal);
       signal.throwIfAborted();
+      setStage({ stage: 'verify' });
       job.status = 'verifying'; this.save(job);
       const proof = await this.verify(temp, {...config, expectedWatermarkId: watermarkId, expectedSize:job.settings.aspect ? videoSizes[job.settings.aspect] : undefined}, signal);
       signal.throwIfAborted();
+      setStage({ stage: 'publish' });
       await this.authorizeJob(job,'release',signal);
       await rename(temp, join(this.directory, job.key + '.mp4'));
       signal.throwIfAborted();
@@ -341,7 +356,8 @@ export class VideoService {
     await this.authorizeJob(current,'download',undefined,actor);
     const file = join(this.directory, key + '.mp4');
     if (await policyDigest(this.config).catch(() => '') !== current.policy || await digestFile(file).catch(() => '') !== current.digest) {
-      this.save({ ...current, status: 'failed' }); throw new ApiError(409, 'Video integrity check failed.');
+      this.fail(current, { stage: 'verify' });
+      throw new ApiError(409, 'Video integrity check failed.');
     }
     if(current.biometricRef && !this.vault.active(current.biometricRef)) throw new ApiError(403,'Avatar consent has been revoked.');
     return file;

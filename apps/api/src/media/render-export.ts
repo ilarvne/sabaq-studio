@@ -173,12 +173,18 @@ export function renderVideoSteps(deck:Deck,roots:MediaRoots,settings:VideoSettin
     if(Object.values(issues).some(list=>list.includes('overflow') || list.includes('overlap'))) throw new Error('The slide does not fit the requested video format.');
     // Keep layout stable: hide later elements without removing their occupied space.
     const total=await page.evaluate(()=>window.prepareVideoSteps());
-    if(count>total+1) throw new Error('The number of narration paragraphs exceeds the available reveal steps.');
     const frames:Buffer[]=[];
+    let lastVisible=-1;
+    let frame:Buffer|undefined;
     for(let i=0;i<count;i++){
       signal.throwIfAborted();
-      await page.evaluate(visible=>window.showVideoStep(visible),Math.floor(total*(i+1)/count));
-      frames.push(await page.screenshot({type:'png',animations:'disabled'}));
+      const visible=Math.max(Math.floor(total*(i+1)/count),Math.min(i,total));
+      if(!frame || visible!==lastVisible){
+        await page.evaluate(step=>window.showVideoStep(step),visible);
+        frame=await page.screenshot({type:'png',animations:'disabled'});
+        lastVisible=visible;
+      }
+      frames.push(frame);
     }
     return frames;
   },signal,settings);
