@@ -955,6 +955,9 @@
 .rv-speakerpanel h3:first-child { margin-top: 0; }
 .rv-speaker-tools { display: grid; gap: 12px; margin-top: 20px; padding-top: 14px; border-top: 1px solid #485361; }
 .rv-speaker-tools .rv-elapsed { margin: 0; padding: 0; border: 0; }
+.rv-speaker-pace { display: grid; gap: 4px; }
+.rv-speaker-tools .rv-speaker-reset { justify-self: start; color: #d7e2f1; }
+.rv-speaker-tools .rv-speaker-reset:hover, .rv-speaker-tools .rv-speaker-reset:focus-visible { color: #fff; background: #383838; }
 .rv-speaker-tools .rv-secondary { justify-self: start; }
 @media (max-width: 650px) {
   .rv-dialog:not(.rv-mode-present) { border-radius: 9px; }
@@ -989,9 +992,10 @@
 
 @media(max-width:650px) {
   .rv-classroom .rv-next-slide {display:grid;grid-template-columns:minmax(65px,26%) 1fr;gap:10px;align-items:center;}
+  .rv-classroom .rv-next-slide .rv-mini {width:100%;}
   .rv-classroom .rv-speakerpanel .rv-next-title {margin:0;}
   .rv-speaker-notes {padding:8px 10px;margin-bottom:9px;}
-  .rv-speaker-tools {margin-top:10px;padding-top:10px;}
+  .rv-speaker-tools {gap:8px;margin-top:10px;padding-top:10px;}
 }
 @media(max-width:360px) {
   .rv-classroom .rv-present-bar {display:grid;grid-template-columns:max-content minmax(0,1fr);gap:0; padding-inline:3px;}

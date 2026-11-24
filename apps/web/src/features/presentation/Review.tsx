@@ -1,4 +1,5 @@
 import { formatStudioDate } from '@/lib/date';
+import { narrationSource, spokenNarration } from '@sabaq/lesson/narration';
 import { speechSeconds } from '@sabaq/lesson/speech-time';
 import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import {
@@ -56,6 +57,7 @@ type ReviewProps = {
   onRestore: (next: Deck) => void;
 };
 type PanelProps = { deck: Deck; locale: Locale; slideId?: string; t: Translate };
+type SpeakerTiming = { elapsed: string; pace: string; plan: string };
 
 const languageNames: Record<Locale, string> = { kk: 'Қазақша', ru: 'Русский', en: 'English' };
 const readySlides = (deck: Deck) => deck.slides.filter((slide) => slide.status === 'ready');
@@ -174,16 +176,34 @@ function writeSpeakerNotes(view: Window, text: string) {
   notes.classList.toggle('hidden', !text);
 }
 
-function writeSpeakerPlan(view:Window,text:string) {
-  let doc:Document;
-  try { doc=view.document; } catch { return; }
-  const clock=doc.querySelector('.speaker-controls-time');
-  if (!clock) return;
-  const node=doc.getElementById('lesson-time-plan') ?? doc.createElement('p');
-  node.id='lesson-time-plan';
-  node.style.fontSize='14px';
-  node.textContent=text;
-  if (!node.parentNode) clock.append(node);
+function installSpeakerTimer(doc: Document, t: Translate, reset: () => void) {
+  const nativeTimer = doc.querySelector<HTMLElement>('.speaker-controls-time');
+  if (!nativeTimer) return;
+  // Leave the notes plugin's timer mounted for its internal updates.
+  nativeTimer.hidden = true;
+  const timing = doc.createElement('section');
+  timing.style.cssText = 'padding: 10px 16px 16px; border-bottom: 1px solid #ddd;';
+  const heading = doc.createElement('h4');
+  heading.style.cssText = 'margin: 0; font-size: 14px; font-weight: normal;';
+  heading.textContent = t('time');
+  const elapsed = doc.createElement('strong');
+  elapsed.id = 'lesson-presentation-elapsed';
+  elapsed.style.cssText = 'display: block; margin-top: 4px; font-size: 24px; font-variant-numeric: tabular-nums;';
+  const pace = doc.createElement('p');
+  const plan = doc.createElement('p');
+  for (const line of [pace, plan]) line.style.cssText = 'margin: 6px 0; font-size: 14px;';
+  const resetButton = doc.createElement('button');
+  resetButton.type = 'button';
+  resetButton.textContent = t('resetClock');
+  resetButton.addEventListener('click', reset);
+  timing.append(heading, elapsed, pace, plan, resetButton);
+  nativeTimer.before(timing);
+  return (next: SpeakerTiming) => {
+    elapsed.textContent = next.elapsed;
+    pace.textContent = next.pace;
+    pace.hidden = !next.pace;
+    plan.textContent = next.plan;
+  };
 }
 
 // The plugin creates its own document and does not expose a translation API.
@@ -193,6 +213,7 @@ function localizeSpeaker(
   t: Translate,
   navigateKey: (key: string) => boolean,
   initialNotes: string,
+  resetTimer: () => void,
 ) {
   const doc = view.document;
   doc.documentElement.lang = locale;
@@ -224,9 +245,6 @@ function localizeSpeaker(
   // The popup already has the teacher's notes while its two projection frames boot.
   // Reveal's own updates begin when its first receiver signals readiness.
   writeSpeakerNotes(view, initialNotes);
-  label('.reset-button', 'resetClock');
-  const clockLabel = doc.querySelector('.speaker-controls-time .label')?.firstChild;
-  if (clockLabel?.nodeType === Node.TEXT_NODE) clockLabel.textContent = t('time') + ' ';
   const dropdown = doc.querySelector<HTMLSelectElement>('.speaker-layout-dropdown');
   const names: Record<string, ReviewWord> = {
     default: 'speakerDefault',
@@ -258,6 +276,7 @@ function localizeSpeaker(
   });
   frames.observe(doc.body, { childList: true, subtree: true });
   view.addEventListener('pagehide', () => frames.disconnect(), { once: true });
+  return installSpeakerTimer(doc, t, resetTimer);
 }
 
 function Classroom({
@@ -281,21 +300,38 @@ function Classroom({
   const [full, setFull] = useState(false);
   const [error, setError] = useState('');
   const [seconds, setSeconds] = useState(0);
+  const startedAt = useRef(performance.now());
   const room = useRef<HTMLDivElement>(null);
   const stage = useRef<HTMLDivElement>(null);
   const api = useRef<RevealApi | null>(null);
   const speakerWindow = useRef<Window | null>(null);
+  const speakerTiming = useRef<((timing: SpeakerTiming) => void) | undefined>(undefined);
   const notesId = useId();
   const slide = slides[index];
-  const [weights]=useState(()=>slides.map(item=>speechSeconds(item.notes.trim() || item.body || item.title)));
+  const [weights] = useState(() => {
+    const rate = deck.speechProfile?.language === deck.language ? deck.speechProfile.wordsPerMinute : undefined;
+    return slides.map(item => speechSeconds(spokenNarration(narrationSource(item), deck.language), rate));
+  });
   const weightTotal=weights.reduce((sum,value)=>sum+value,0);
   const planTotal=deck.plannedMinutes ? Math.round(deck.plannedMinutes*60) : weightTotal;
   const endOfSlide=weightTotal ? Math.round(planTotal*weights.slice(0,index+1).reduce((sum,value)=>sum+value,0)/weightTotal) : 0;
-  const timePlan=t('slideEndPlan')+' '+clock(endOfSlide)+' · '+t('lessonPlan')+' '+clock(planTotal);
+  const remaining = endOfSlide - seconds;
+  const elapsed = clock(seconds);
+  const pace = !weightTotal ? '' : remaining === 0 ? t('paceOnTime') :
+    clock(Math.abs(remaining)) + ' ' + t(remaining > 0 ? 'paceLeft' : 'paceOver');
+  const plan = t('lessonPlan') + ' ' + clock(planTotal);
+  const resetTimer = () => {
+    startedAt.current = performance.now();
+    setSeconds(0);
+  };
   useEffect(() => {
     const view = speakerWindow.current;
-    if (view && !view.closed) {writeSpeakerNotes(view, slide?.notes ?? '');writeSpeakerPlan(view,timePlan);}
-  }, [slide,timePlan]);
+    if (view && !view.closed) writeSpeakerNotes(view, slide?.notes ?? '');
+  }, [slide]);
+  useEffect(() => {
+    if (speakerWindow.current?.closed) speakerTiming.current = undefined;
+    speakerTiming.current?.({elapsed, pace, plan});
+  }, [elapsed, pace, plan]);
   useEffect(() => {
     if (!stage.current || !slides.length) return;
     const url = new URL(location.pathname, location.origin);
@@ -372,6 +408,7 @@ function Classroom({
       disposed = true;
       speakerWindow.current?.close();
       speakerWindow.current = null;
+      speakerTiming.current = undefined;
       if (api.current === instance && instance) {
         api.current = null;
         instance.destroy();
@@ -380,8 +417,7 @@ function Classroom({
   }, [deck.id, deck.revision, locale, receiver, slides, start]); // t reflects locale
   useEffect(() => {
     if (receiver) return;
-    const begin = Date.now();
-    const interval = window.setInterval(() => setSeconds(Math.floor((Date.now() - begin) / 1000)), 1000);
+    const interval = window.setInterval(() => setSeconds(Math.floor((performance.now() - startedAt.current) / 1000)), 1000);
     const changed = () => setFull(!!document.fullscreenElement);
     document.addEventListener('fullscreenchange', changed);
     return () => {
@@ -411,13 +447,13 @@ function Classroom({
       const view = window.open('', 'reveal.js - Notes');
       if (view) {
         speakerWindow.current = view;
-        localizeSpeaker(view, locale, t, navigateKey, slide?.notes ?? '');
-        writeSpeakerPlan(view,timePlan);
+        speakerTiming.current = localizeSpeaker(view, locale, t, navigateKey, slide?.notes ?? '', resetTimer);
+        speakerTiming.current?.({elapsed, pace, plan});
+        return;
       }
-    } catch {
-      setError(t('popupBlocked'));
-      setSpeaker(true);
-    }
+    } catch { /* The inline notes remain available when the browser blocks the popup. */ }
+    setError(t('popupBlocked'));
+    setSpeaker(true);
   };
   const toggleFull = () => {
     const pending = document.fullscreenElement
@@ -519,9 +555,15 @@ function Classroom({
                 <div className="rv-elapsed">
                   <ClockIcon size={16} />
                   <span>{t('time')}</span>
-                  <strong>{clock(seconds)}</strong>
+                  <strong>{elapsed}</strong>
                 </div>
-                <small>{timePlan}</small>
+                <div className="rv-speaker-pace">
+                  {pace && <p>{pace}</p>}
+                  <small>{plan}</small>
+                </div>
+                <Button type="button" variant="ghost" size="sm" className="rv-speaker-reset" onClick={resetTimer}>
+                  {t('resetClock')}
+                </Button>
                 <Button type="button" variant="outline" className="rv-secondary" onClick={openNotes}>
                   <ArrowSquareOutIcon size={17} />
                   {t('speakerWindow')}
@@ -690,7 +732,7 @@ function RevisionPanel({
     }
   }
   const reasonLabel = (reason: string): ReviewWord =>
-    /restor/i.test(reason)
+    reason === 'Theme change' ? 'themeChanged' : /restor/i.test(reason)
       ? 'restored'
       : /propos|assist/i.test(reason)
         ? 'assistant'
@@ -716,7 +758,7 @@ function RevisionPanel({
             value={String(selection)}
             options={list.map((r) => ({
               value: String(r.revision),
-              label: `${t('version')} ${r.revision} · ${t(r.revision === base ? 'current' : reasonLabel(r.reason))} · ${stamp(r.at)}`,
+              label: [`${t('version')} ${r.revision}`, t(reasonLabel(r.reason)), ...(r.revision === base ? [t('current')] : []), stamp(r.at)].join(' · '),
             }))}
             onChange={(value) => chooseVersion(Number(value))}
           />

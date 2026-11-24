@@ -57,7 +57,7 @@ test('a phone can edit slide text and open the presenter poll without horizontal
   try {
     const page = await phone.newPage();
     await page.addInitScript(()=>localStorage.setItem('sabaq:locale','en'));
-    const created=await request.post('/api/decks',{data:{topic:'Phone editor',language:'en',template:'blank',provider:'fixture',review:false}});
+    const created=await request.post('/api/decks',{data:{topic:'Phone editor',language:'en',template:'blank',provider:'fixture',review:false,slideCount:3}});
     const deck:Deck=await created.json();
     await page.goto('/#/deck/'+deck.id);
     await expect(page.locator('.ed-stage article')).toBeVisible();
@@ -73,6 +73,12 @@ test('a phone can edit slide text and open the presenter poll without horizontal
     await expect(page.locator('.as-composer textarea')).toBeVisible();
     await page.getByRole('button',{name:'Present',exact:true}).click();
     const dialog=page.getByRole('dialog');
+    const speaker=dialog.getByRole('button',{name:'Speaker view',exact:true});
+    await speaker.click();
+    const thumbnail = await dialog.locator('.rv-next-slide .rv-mini').boundingBox();
+    const caption = await dialog.locator('.rv-next-title').boundingBox();
+    expect(thumbnail!.x + thumbnail!.width).toBeLessThan(caption!.x);
+    await speaker.click();
     await dialog.getByRole('button',{name:'Class poll',exact:true}).click();
     const panel=dialog.getByRole('region',{name:'Class poll',exact:true});
     await expect(panel.getByLabel('Question',{exact:true})).toBeVisible();
@@ -106,6 +112,9 @@ test('presenter window tracks the projected lesson and keeps answers hidden unti
   const current = dialog.locator('section.present article');
   await expect(current).toHaveAttribute('data-slide-id', deck.slides[0].id);
   await dialog.getByRole('button', { name: 'Speaker view' }).click();
+  const elapsed = dialog.locator('.rv-elapsed strong');
+  await expect(elapsed).not.toHaveText('00:00');
+  await expect(dialog.getByText(/left on this slide|past the slide target|On schedule/)).toBeVisible();
 
   // The teacher can read a note even when both receiver frames are waiting for the deck.
   let releaseReceivers!: () => void;
@@ -127,6 +136,12 @@ test('presenter window tracks the projected lesson and keeps answers hidden unti
   try {
     await expect(notes).toHaveText(deck.slides[0].notes);
     await expect(notes).toBeVisible();
+    const speakerElapsed = speaker.locator('#lesson-presentation-elapsed');
+    await expect(speakerElapsed).not.toHaveText('00:00');
+    await expect.poll(async () => {
+      const [popupTime, inlineTime] = await Promise.all([speakerElapsed.textContent(), elapsed.textContent()]);
+      return popupTime === inlineTime;
+    }).toBe(true);
     await dialog.getByRole('button', { name: 'Next slide' }).click();
     await expect(notes).toHaveText(deck.slides[1].notes);
     await dialog.getByRole('button', { name: 'Previous slide' }).click();
@@ -136,6 +151,9 @@ test('presenter window tracks the projected lesson and keeps answers hidden unti
     releaseReceivers();
   }
   await expect(upcoming).toHaveAttribute('data-slide-id', deck.slides[1].id);
+  await speaker.getByRole('button', { name: 'Reset timer', exact: true }).click();
+  await expect(elapsed).toHaveText('00:00');
+  await expect(speaker.locator('#lesson-presentation-elapsed')).toHaveText('00:00');
   await dialog.getByRole('button', { name: 'Next slide' }).click();
   await expect(upcoming).toHaveAttribute('data-slide-id', deck.slides[2].id);
   await expect(notes).toHaveText(deck.slides[1].notes);
@@ -281,17 +299,28 @@ test('restoring the selected snapshot creates a new revision and preserves the p
     },
   });
   expect(changed.ok()).toBe(true);
+  const edited = (await changed.json()) as Deck;
+  const themed = await request.patch(url, {
+    data: {
+      operationId: crypto.randomUUID(),
+      baseRevision: edited.revision,
+      op: { kind: 'deck', theme: original.theme === 'blueprint' ? 'notebook' : 'blueprint' },
+    },
+  });
+  expect(themed.ok()).toBe(true);
   const version = original.revision;
   await page.goto('/#/deck/schoolyard-ru');
   await page.getByRole('button', { name: 'Lesson actions' }).click();
   await page.getByRole('menuitem', { name: 'Versions', exact: true }).click();
   const dialog = page.getByRole('dialog');
+  await expect(dialog.locator('.rv-version').first()).toContainText('Theme change');
   await dialog.getByRole('button', { name: new RegExp('Version ' + version + '\\b') }).click();
   await expect(dialog.locator('.rv-history-main')).toContainText(original.title);
   await dialog.getByRole('button', { name: 'Restore this version' }).click();
   await expect(dialog.locator('.rv-version').first()).toContainText('Restored');
   const restored = (await (await request.get(url)).json()) as Deck;
   expect(restored.title).toBe(original.title);
-  expect(restored.revision).toBe(version + 2);
-  await expect(dialog.locator('.rv-version')).toHaveCount(version + 3);
+  expect(restored.theme).toBe(original.theme);
+  expect(restored.revision).toBe(version + 3);
+  await expect(dialog.locator('.rv-version')).toHaveCount(version + 4);
 });
