@@ -3,8 +3,35 @@ import assert from 'node:assert/strict';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { createStudioServer } from '../app';
 import type { Deck } from '@sabaq/lesson/types';
+import { researchCapabilities, retrievePublicSources } from './research';
 
 const query = 'Табиғаттағы су айналымы';
+test('preset Exa queries require a permitted origin in gateway mode', async t => {
+  const settings = {
+    STUDIO_AUTH_MODE: 'gateway',
+    STUDIO_RESEARCH_PROVIDER: 'exa',
+    EXA_API_KEY: 'test-only',
+    STUDIO_RESEARCH_TOPICS: query,
+    STUDIO_KZ_PROVIDER_ORIGINS: '',
+  };
+  const previous = Object.fromEntries(Object.keys(settings).map(key => [key, process.env[key]]));
+  Object.assign(process.env, settings);
+  t.after(() => {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+  const fetch = t.mock.method(globalThis, 'fetch', async () => Response.json({ results: [] }));
+
+  assert.deepEqual(researchCapabilities(), []);
+  await assert.rejects(retrievePublicSources(query, AbortSignal.timeout(1000)), /public query is unavailable/i);
+  assert.equal(fetch.mock.callCount(), 0);
+
+  process.env.STUDIO_KZ_PROVIDER_ORIGINS = 'https://api.exa.ai';
+  assert.deepEqual(researchCapabilities(), [query]);
+});
+
 test('research mode checkpoints public evidence and uses only approved queries at the search boundary', async t => {
   const old = { provider: process.env.STUDIO_RESEARCH_PROVIDER, key: process.env.EXA_API_KEY, topics: process.env.STUDIO_RESEARCH_TOPICS };
   process.env.STUDIO_RESEARCH_PROVIDER = 'exa';

@@ -4,7 +4,7 @@ import { GenerationHttpError } from './generation-retry';
 import { allowedProviderEndpoint } from '../access/provider-origins';
 import { isTemplate, templatePlan } from '@sabaq/lesson/lesson-templates';
 import type { Deck, Locale, OutlineItem, ResearchSource, Slide, SourceExcerpt, WebResearchMode } from '@sabaq/lesson/types';
-import { searchExa, WebResearchError } from '../research/exa';
+import { exaResearchAvailable, searchExa, WebResearchError } from '../research/exa';
 
 const copy = {
   en: { source: 'Public sources', opening: 'Read the sources and identify the main question.', closing: 'Compare the evidence', question: 'Which source best supports your conclusion? Explain your choice.' },
@@ -25,7 +25,7 @@ const noExcerpt = {
 // Only the operator's public vocabulary can cross the search boundary.
 export function researchCapabilities() {
   const provider = process.env.STUDIO_RESEARCH_PROVIDER;
-  const enabled = (provider === 'exa' && Boolean(process.env.EXA_API_KEY?.trim())) ||
+  const enabled = (provider === 'exa' && exaResearchAvailable()) ||
     (provider === 'searxng' && allowedProviderEndpoint(process.env.STUDIO_SEARCH_URL));
   const topics = (process.env.STUDIO_RESEARCH_TOPICS?.split('|') ?? defaultTopics)
     .map(query => query.trim()).filter(query => query && query.length <= 200);
