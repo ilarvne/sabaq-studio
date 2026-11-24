@@ -85,9 +85,9 @@ const canvasToolbarCopy = {
   kk: { toolbar:'Слайдты басқару', navigation:'Слайдтар арасында өту', zoomIn:'Үлкейту', zoomOut:'Кішірейту', focus:'Фокус', mouse:'Кенепті тінтуірдің ортаңғы түймесімен жылжытыңыз. Масштабты Ctrl және тінтуір дөңгелегімен өзгертіңіз.' },
 };
 const inspectorWords = {
-  en: { design: 'Design', notes: 'Notes', elements: 'Slide elements', deck: 'Entire presentation', words: 'Words', notesHint: 'Visible in presenter view.' },
-  ru: { design: 'Дизайн', notes: 'Лекция', elements: 'Элементы слайда', deck: 'Вся презентация', words: 'Слов', notesHint: 'Видны в режиме докладчика.' },
-  kk: { design: 'Дизайн', notes: 'Жазба', elements: 'Слайд элементтері', deck: 'Бүкіл презентация', words: 'Сөз саны', notesHint: 'Баяндамашы режимінде көрінеді.' },
+  en: { design: 'Design', elements: 'Slide elements', deck: 'Entire presentation', words: 'Words', notesHint: 'Visible in presenter view.' },
+  ru: { design: 'Дизайн', elements: 'Элементы слайда', deck: 'Вся презентация', words: 'Слов', notesHint: 'Видны в режиме докладчика.' },
+  kk: { design: 'Дизайн', elements: 'Слайд элементтері', deck: 'Бүкіл презентация', words: 'Сөз саны', notesHint: 'Баяндамашы режимінде көрінеді.' },
 };
 const insertWords = {
   en: { insert:'Insert', image:'Image', table:'Table', chart:'Chart', diagram:'Diagram from text', formula:'Formula', icon:'Icon', free:'Free layout', column:'Column', category:'Category', series:'Series', newSlide:'on a new slide', limit:'This presentation has reached the 40-slide limit.' },
@@ -700,7 +700,7 @@ export function SlideDetails({
           <TabsList className="inspect-tabs" data-editor-motion="inspector" variant="line" aria-label={c.inspector} activateOnFocus>
             <TabsTrigger value="assistant"><ChatCircleTextIcon /><span>{c.assistant}</span></TabsTrigger>
             <TabsTrigger value="design"><SlidersHorizontalIcon /><span>{labels.design}</span></TabsTrigger>
-            <TabsTrigger value="notes" aria-label={lectureTitle(uiLocale)} title={lectureTitle(uiLocale)}><NotePencilIcon /><span>{labels.notes}</span></TabsTrigger>
+            <TabsTrigger value="notes"><NotePencilIcon aria-hidden /><span>{lectureTitle(uiLocale)}</span></TabsTrigger>
           </TabsList>
           <TabsContent value="design" className="inspect-surface inspect-design">
             <section className="inspect-scope" aria-labelledby="inspect-slide-heading">

@@ -38,6 +38,20 @@ for (const [width, height] of [[1440, 900], [820, 1180], [375, 812], [320, 640]]
   });
 }
 
+test('the notes tab includes its visible label in the accessible name in all three languages', async ({page}) => {
+  await page.goto('/#/deck/schoolyard-en');
+  for (const [language, name] of [['English', 'Lecture text'], ['Қазақша', 'Дәріс мәтіні'], ['Русский', 'Текст лекции']]) {
+    if (language !== 'English') {
+      await page.getByRole('button', {name:/Interface language|Интерфейс тілі|Язык интерфейса/}).click();
+      await page.getByRole('menuitemradio', {name:language, exact:true}).click();
+    }
+    const tab = page.getByRole('tab', {name, exact:true});
+    await expect(tab).toBeVisible();
+    const visibleLabel = await tab.innerText();
+    expect(name.toLocaleLowerCase()).toContain(visibleLabel.trim().toLocaleLowerCase());
+  }
+});
+
 test('an offline answer keeps its sources and can be exported or requested again', async ({page})=>{
   await page.goto('/#/deck/schoolyard-en');
   await page.getByRole('tab',{name:'Assistant',exact:true}).click();
